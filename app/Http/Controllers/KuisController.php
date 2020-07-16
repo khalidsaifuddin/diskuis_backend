@@ -13,6 +13,9 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 use Tymon\JWTAuth\Facades\JWTFactory;
 
 use App\Http\Controllers\RuangController;
+use App\Http\Controllers\LinimasaController;
+
+use App\Http\Middleware\S3;
 
 class KuisController extends Controller
 {
@@ -22,6 +25,168 @@ class KuisController extends Controller
         $return['ref'] = 'mb_ref';
 
         return $return;
+    }
+
+    public function uploadAudio(Request $request)
+    {
+        $data = $request->all();
+        $file = $data['file_audio'];
+        $guid = $data['guid'];
+
+        if(($file == 'undefined') OR ($file == '')){
+            return response()->json(['msg' => 'tidak_ada_file']);
+        }
+
+        $ext = $file->getClientOriginalExtension();
+        $name = $file->getClientOriginalName();
+
+        $destinationPath = base_path('/public/assets/audio');
+        $upload = $file->move($destinationPath, $guid.".".$ext);
+
+        $msg = $upload ? 'sukses' : 'gagal';
+
+        if($upload){
+            return response(['msg' => $msg, 'filename' => "/assets/audio/".$guid.".".$ext]);
+        }
+
+        // try {
+        //     $s3 = new S3( '174ad63d885761e63d0b', 'vPsIF6wJrQ/vgsYxz6HKZMjE303FatMvkGLfQHre' );
+    
+        //     $s3->putBucket('audio-diskuis', S3::ACL_PUBLIC_READ);
+    
+        //     $s3->putObjectFile($guid.".".$ext, 'audio-diskuis', basename($guid.".".$ext), S3::ACL_PUBLIC_READ);
+
+        //     // return true;
+        //     return response(['msg' => 'sukses', 'filename' => $guid.".".$ext]);
+        // } catch (\Throwable $th) {
+        //     //throw $th;
+        //     return response(['msg' => 'gagal', 'filename' => $guid.".".$ext]);
+        //     // return false;
+        // }
+
+
+    }
+
+    static function getStatKuis(Request $request){
+        $sesi_kuis_id = $request->input('sesi_kuis_id');
+
+        $sql = "SELECT
+            rerata.rata,
+            rerata.maksimal,
+            rerata.minimal,
+            rerata.total_peserta,
+            tertinggi.pengguna_id AS peserta_tertinggi,
+            tertinggi.nama_pengguna as peserta_tertinggi_nama,
+            terendah.pengguna_id AS peserta_terendah,
+            terendah.nama_pengguna as peserta_terendah_nama,
+            kuis.* 
+        FROM
+            kuis
+            JOIN sesi_kuis ON sesi_kuis.kuis_id = kuis.kuis_id
+            LEFT JOIN (
+            SELECT
+                sesi_kuis_id,
+                kuis_id,
+                AVG ( skor ) AS rata,
+                MAX ( skor ) AS maksimal,
+                MIN ( skor ) AS minimal,
+                sum(1) as total_peserta
+            FROM
+                pengguna_kuis 
+            WHERE
+                sesi_kuis_id = '{$sesi_kuis_id}' 
+                AND soft_delete = 0 
+            GROUP BY
+                sesi_kuis_id,
+                kuis_id 
+            ) rerata ON rerata.kuis_id = kuis.kuis_id
+            LEFT JOIN (
+            SELECT
+                pengguna_kuis.sesi_kuis_id,
+                pengguna_kuis.kuis_id,
+                pengguna_kuis.pengguna_id,
+                pengguna_kuis.skor,
+                pengguna_kuis.create_date,
+                pengguna_kuis.last_update,
+                pengguna_kuis.durasi ,
+                pengguna.nama as nama_pengguna
+            FROM
+                pengguna_kuis 
+                join pengguna on pengguna.pengguna_id = pengguna_kuis.pengguna_id and pengguna.soft_delete = 0
+            WHERE
+                pengguna_kuis.soft_delete = 0 
+                AND pengguna_kuis.sesi_kuis_id = '{$sesi_kuis_id}' 
+            ORDER BY
+                pengguna_kuis.skor DESC,
+                pengguna_kuis.durasi DESC 
+                LIMIT 1 
+            ) tertinggi ON tertinggi.kuis_id = kuis.kuis_id
+            LEFT JOIN (
+            SELECT
+                pengguna_kuis.sesi_kuis_id,
+                pengguna_kuis.kuis_id,
+                pengguna_kuis.pengguna_id,
+                pengguna_kuis.skor,
+                pengguna_kuis.create_date,
+                pengguna_kuis.last_update,
+                pengguna_kuis.durasi ,
+                pengguna.nama as nama_pengguna
+            FROM
+                pengguna_kuis 
+                join pengguna on pengguna.pengguna_id = pengguna_kuis.pengguna_id and pengguna.soft_delete = 0
+            WHERE
+                pengguna_kuis.soft_delete = 0 
+                AND pengguna_kuis.sesi_kuis_id = '{$sesi_kuis_id}' 
+            ORDER BY
+                pengguna_kuis.skor ASC,
+                pengguna_kuis.durasi ASC 
+                LIMIT 1 
+            ) terendah ON terendah.kuis_id = kuis.kuis_id 
+        WHERE
+            kuis.soft_delete = 0 
+            AND sesi_kuis.soft_delete = 0 
+            AND sesi_kuis.sesi_kuis_id = '{$sesi_kuis_id}'";
+
+        $fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+        return $fetch;
+    }
+
+    static function aktivitasKuis(Request $request){
+        $kuis_id = $request->kuis_id ? $request->kuis_id : null;
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 20;
+
+        $fetch = DB::connection('sqlsrv_2')
+        ->table('pengguna_kuis')
+        ->join('kuis','kuis.kuis_id','=','pengguna_kuis.kuis_id')
+        ->join('pengguna as peserta_kuis','peserta_kuis.pengguna_id','=','pengguna_kuis.pengguna_id')
+        ->where('pengguna_kuis.soft_delete','=',0)
+        ->orderBy('pengguna_kuis.create_date','DESC')
+        ->select(
+            'pengguna_kuis.*',
+            'peserta_kuis.nama as peserta',
+            'peserta_kuis.gambar as gambar_peserta',
+            'kuis.judul as nama_kuis'
+        )
+        ;
+
+        if($kuis_id){
+            $fetch->where('pengguna_kuis.kuis_id','=',$kuis_id);
+        }
+
+        if($pengguna_id){
+            $fetch->where('kuis.pengguna_id','=',$pengguna_id);
+        }
+
+        return response(
+            [
+                'rows' => $fetch->skip($start)->take($limit)->get(),
+                'total' =>$fetch->count()
+            ],
+            200
+        );
     }
     
     static public function generateUUID()
@@ -34,6 +199,36 @@ class KuisController extends Controller
         ->first();
 
         return $uuid->{'uuid'};
+    }
+
+    static public function hapusKuis(Request $request){
+        $kuis_id = $request->kuis_id;
+
+        $exe1 = DB::connection('sqlsrv_2')->table('kuis')
+        ->where('kuis_id','=', $kuis_id)
+        ->update([
+            'soft_delete' => 1,
+            'last_update' => DB::raw('now()::timestamp(0)')
+        ]);
+
+        if($exe1){
+
+            return response(
+                [
+                    '1' => ($exe1 ? true : false),
+					'success' => true
+				],
+				200
+			);
+
+        }else{
+            return response(
+                [
+					'success' => false
+				],
+				200
+			);
+        }
     }
 
     static public function hapusSesiKuis(Request $request){
@@ -105,7 +300,7 @@ class KuisController extends Controller
                             COALESCE(pengguna_kuis.skor,0) as skor
                         FROM
                             sesi_kuis
-                            JOIN kuis on kuis.kuis_id = sesi_kuis.kuis_id
+                            JOIN kuis on kuis.kuis_id = sesi_kuis.kuis_id and kuis.soft_delete = 0
                             LEFT JOIN pengguna_kuis ON sesi_kuis.sesi_kuis_id = pengguna_kuis.sesi_kuis_id AND pengguna_kuis.pengguna_id = '".$fetch[$iFetch]->pengguna_id."'
                         WHERE
                             sesi_kuis.ruang_id = '".$fetch[$iFetch]->ruang_id."'
@@ -121,7 +316,7 @@ class KuisController extends Controller
                 $arrTmp = array();
 
                 $arrTmp['judul'] = $fetch_kuis[$iFetchKuis]->{'judul'};
-                $arrTmp['skor'] = $fetch_kuis[$iFetchKuis]->{'skor'};
+                $arrTmp['skor'] = round($fetch_kuis[$iFetchKuis]->{'skor'},2);
 
                 // $fetch[$iFetch]->{$fetch_kuis[$iFetchKuis]->{'judul'}} = $fetch_kuis[$iFetchKuis]->{'skor'};
 
@@ -174,17 +369,20 @@ class KuisController extends Controller
                         FROM
                             sesi_kuis 
                         WHERE
-                            \"default\" = 1) sesi_default on sesi_default.kuis_id = kuis.kuis_id AND sesi_default.urutan = 1
+                            \"default\" = 1
+                        AND soft_delete = 0
+                        AND ruang_id is null) sesi_default on sesi_default.kuis_id = kuis.kuis_id AND sesi_default.urutan = 1
                     WHERE
                         kuis.soft_delete = 0 
                         and kuis.publikasi = 1
+                        and kuis.status_privasi = 1
                 ) kuis_trending
                 JOIN pengguna on pengguna.pengguna_id = kuis_trending.pengguna_id
                 ORDER BY
                     akses_terakhir DESC,
                     jumlah_peserta DESC,
                     jumlah_sesi DESC
-                LIMIT 10";
+                LIMIT 8";
 
         $fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
 
@@ -267,7 +465,7 @@ class KuisController extends Controller
         $waktu_selesai = $request->input('waktu_selesai');
         $keterangan = $request->input('keterangan');
         $jumlah_percobaan = $request->input('jumlah_percobaan');
-        $ruang_id = $request->input('ruang_id');
+        $ruang_id = $request->input('ruang_id') ? $request->input('ruang_id') : null;
         $sesi_kuis_id = self::generateUUID();
 
         $exe = DB::connection('sqlsrv_2')->table('sesi_kuis')->insert([
@@ -291,10 +489,46 @@ class KuisController extends Controller
         $label = 'INSERT';  
 
         if($exe){
+
+            if($label == 'INSERT' && $ruang_id){
+                try {
+                    //code...
+                    $linimasa_id = RuangController::generateUUID();
+                    $linimasa = LinimasaController::simpanLinimasa($linimasa_id, $pengguna_id,2,'','',$ruang_id,$sesi_kuis_id);
+        
+                    if($linimasa){
+                        $sukses_linimasa = true;
+                    }else{
+                        $sukses_linimasa = false;
+                    }
+                } catch (\Throwable $th) {
+                    $sukses_linimasa = false;
+                }
+
+                try {
+                    //code...
+                    $aktivitas_id = RuangController::generateUUID();
+                    $aktivitas = LinimasaController::simpanAktivitas($aktivitas_id, $pengguna_id, 2, 'tambah kuis ke ruang', $sesi_kuis_id);
+        
+                    if($aktivitas){
+                        $sukses_aktivitas = true;
+                    }else{
+                        $sukses_aktivitas = false;
+                    }
+                } catch (\Throwable $th) {
+                    $sukses_aktivitas = false;
+                }
+            }else{
+                $sukses_linimasa = false;
+                $sukses_aktivitas = false;
+            }
+
             return response(
                 [
 					'rows' => DB::connection('sqlsrv_2')->table('sesi_kuis')->where('sesi_kuis_id','=',$sesi_kuis_id)->get(),
-					'success' => true
+					'success' => true,
+					'sukses_linimasa' => ($sukses_linimasa ? true : false),
+					'sukses_aktivitas' => ($sukses_aktivitas ? true : false)
 				],
 				200
 			);
@@ -413,7 +647,9 @@ class KuisController extends Controller
             $fetch[$iData]->{'pilihan_pertanyaan_kuis'} = (object)array();
             
             $fetch_pertanyaan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
-            ->where('pertanyaan_kuis_id','=',$fetch[$iData]->{'pertanyaan_kuis_id'})->get();
+            ->where('pertanyaan_kuis_id','=',$fetch[$iData]->{'pertanyaan_kuis_id'})
+            ->where('pilihan_pertanyaan_kuis.soft_delete','=',0)
+            ->get();
             
             for ($iPertanyaan=0; $iPertanyaan < sizeof($fetch_pertanyaan); $iPertanyaan++) { 
                 
@@ -436,6 +672,7 @@ class KuisController extends Controller
 
     public function getKuisDiikuti(Request $request){
         $pengguna_id = $request->input('pengguna_id');
+        $hanya_publik = $request->input('hanya_publik') ? $request->input('hanya_publik') : 'N';
 
         $fetch_cek = DB::connection('sqlsrv_2')->table('pengguna_kuis')
         ->join('pengguna','pengguna.pengguna_id','=','pengguna_kuis.pengguna_id')
@@ -462,10 +699,13 @@ class KuisController extends Controller
         ->where('pengguna_kuis.pengguna_id','=',DB::raw("'".$pengguna_id."'"))
         // ->where('pengguna_kuis.kuis_id','=',$kuis_id)
         ->where('pengguna_kuis.soft_delete','=',DB::raw('0'))
+        ->where('kuis.soft_delete','=',DB::raw('0'))
+        ->whereIn('kuis.status_privasi',($hanya_publik == 'Y' ? array('1') : array('1','2')))
         ->select(
             'pengguna_kuis.*',
             'kuis.*',
             'sesi_kuis.keterangan as keterangan_sesi_kuis',
+            'sesi_kuis.kode_sesi',
             'pengguna.nama as nama_pengguna',
             'peringkat.peringkat',
             'jumtot.total as total_peserta',
@@ -498,7 +738,7 @@ class KuisController extends Controller
             $join->on('jumtot.sesi_kuis_id','=', 'pengguna_kuis.sesi_kuis_id');
         })
         ->join(DB::raw("(SELECT ROW_NUMBER
-            () OVER ( ORDER BY skor DESC ) AS peringkat ,
+            () OVER ( ORDER BY COALESCE(skor,0) DESC, COALESCE(pengguna_kuis.durasi,0) ASC ) AS peringkat ,
             *
         FROM
             pengguna_kuis 
@@ -521,7 +761,8 @@ class KuisController extends Controller
         }
 
         if($order_by_peringkat == 'Y'){
-            $fetch_cek->orderBy('peringkat.peringkat','ASC');
+            $fetch_cek->orderBy('peringkat.peringkat','ASC')
+            ;
         }
 
         $fetch_cek = $fetch_cek->get();
@@ -561,10 +802,123 @@ class KuisController extends Controller
         return $return;
     }
 
+    public function simpanPertanyaanKuis(Request $request){
+        $kuis_id = $request->input('kuis_id');
+        $pertanyaan_kuis_id = $request->input('pertanyaan_kuis_id');
+        $teks = $request->input('teks');
+        $file_audio = $request->input('file_audio');
+        $file_video = $request->input('file_video');
+        $pengguna_id = $request->input('pengguna_id');
+        $soft_delete = $request->input('soft_delete') ? $request->input('soft_delete') : '0';
+        $pilihan_pertanyaan_kuis = $request->input('pilihan_pertanyaan_kuis');
+        
+
+        //simpan pertanyaan kuisnya
+        $fetch_cek = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')->where('pertanyaan_kuis_id','=',$pertanyaan_kuis_id)->get();
+
+        if(sizeof($fetch_cek) > 0){
+            //sudah ada
+            $exe = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
+            ->where('pertanyaan_kuis_id','=',$pertanyaan_kuis_id)
+            ->update([
+                'teks' => $teks,
+                'pengguna_id' => $pengguna_id,
+                'file_audio' => $file_audio,
+                'file_video' => $file_video,
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => $soft_delete
+            ]);
+            $label = 'UPDATE';
+        }else{
+            //belum ada
+            $exe = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
+            ->insert([
+                'pertanyaan_kuis_id' => $pertanyaan_kuis_id,
+                'teks' => $teks,
+                'pengguna_id' => $pengguna_id,
+                'file_audio' => $file_audio,
+                'file_video' => $file_video,
+                'tanggal' => DB::raw('now()::timestamp(0)'),
+                'kuis_id' => $kuis_id,
+                'create_date' => DB::raw('now()::timestamp(0)'),
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => $soft_delete
+            ]);
+            $label = 'INSERT';
+        }
+
+        if($exe){
+
+            //simpan pilihannya
+            $pilihan_sukses = 0;
+            $pilihan_total = 0;
+
+            if($pilihan_pertanyaan_kuis){
+
+                foreach ($pilihan_pertanyaan_kuis as $key => $obj) {
+                    // return $obj;die;
+    
+                    $fetch_cek_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')->where('pilihan_pertanyaan_kuis_id','=',$obj['pilihan_pertanyaan_kuis_id'])->get();
+    
+                    if(sizeof($fetch_cek_pilihan) > 0){
+                        //sudah ada
+                        $exe_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
+                        ->where('pilihan_pertanyaan_kuis_id','=',$obj['pilihan_pertanyaan_kuis_id'])
+                        ->update([
+                            'jawaban_benar' => $obj['jawaban_benar'],
+                            'teks' => $obj['teks'],
+                            'soft_delete' => $obj['soft_delete'],
+                            'last_update' => DB::raw('now()::timestamp(0)')
+                        ]);
+                        $label = 'UPDATE';
+                    }else{
+                        //belum ada
+                        $exe_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
+                        ->insert([
+                            'pilihan_pertanyaan_kuis_id' => $obj['pilihan_pertanyaan_kuis_id'],
+                            'jawaban_benar' => $obj['jawaban_benar'],
+                            'teks' => $obj['teks'],
+                            'soft_delete' => $obj['soft_delete'],
+                            'pertanyaan_kuis_id' => $pertanyaan_kuis_id,
+                            'pengguna_id' => $pengguna_id,
+                            'create_date' => DB::raw('now()::timestamp(0)'),
+                            'last_update' => DB::raw('now()::timestamp(0)')
+                        ]);
+                        $label = 'INSERT';
+                    }
+    
+                    if($exe_pilihan){
+                        $pilihan_sukses++;
+                    }
+    
+                    $pilihan_total++;
+    
+                }
+                
+            }
+
+
+        }
+
+        return response(
+            [
+                'success' => ($exe ? true: false),
+                'pilihan_total' => $pilihan_total,
+                'kuis_id' => $kuis_id,
+                'pengguna_id' => $pengguna_id,
+                'pilihan_sukses' => $pilihan_sukses,
+                'pertanyaan_kuis_id' => $pertanyaan_kuis_id
+            ],
+            200
+        );
+        // return $pilihan_pertanyaan_kuis;
+    }
+
     public function simpanPenggunaKuis(Request $request){
         $pengguna_id = $request->input('pengguna_id');
         $kuis_id = $request->input('kuis_id');
         $sesi_kuis_id = $request->input('sesi_kuis_id');
+        $durasi = $request->input('durasi');
         $status_mengerjakan_id = $request->input('status_mengerjakan_id');
         $skor = $request->input('skor');
         $total = $request->input('total');
@@ -593,6 +947,7 @@ class KuisController extends Controller
                 'total' => $total,
                 'benar' => $benar,
                 'salah' => $salah,
+                'durasi' => $durasi,
                 'last_update' => date('Y-m-d H:i:s')
             ]);
 
@@ -605,6 +960,7 @@ class KuisController extends Controller
                 'pengguna_id' => $pengguna_id,
                 'kuis_id' => $kuis_id,
                 'sesi_kuis_id' => $sesi_kuis_id,
+                'durasi' => $durasi,
                 'status_mengerjakan_id' => ($status_mengerjakan_id ? $status_mengerjakan_id : 1),
                 'pertanyaan_kuis_id_terakhir' => $pertanyaan_kuis_id_terakhir
             ]);
@@ -621,6 +977,37 @@ class KuisController extends Controller
                                 ->get();
             $return['status'] = 'BERHASIL';
             $return['label'] = $label;
+
+            if((int)$status_mengerjakan_id == 2){
+                //simpan linimasa
+                try {
+                    //code...
+                    $linimasa_id = RuangController::generateUUID();
+                    $linimasa = LinimasaController::simpanLinimasa($linimasa_id, $pengguna_id,3,'','',null,$sesi_kuis_id);
+        
+                    if($linimasa){
+                        $return['sukses_linimasa'] = true;
+                    }else{
+                        $return['sukses_linimasa'] = false;
+                    }
+                } catch (\Throwable $th) {
+                    $return['sukses_linimasa'] = false;
+                }
+
+                try {
+                    //code...
+                    $aktivitas_id = RuangController::generateUUID();
+                    $aktivitas = LinimasaController::simpanAktivitas($aktivitas_id, $pengguna_id, 1, 'ikut-kuis', $sesi_kuis_id);
+        
+                    if($aktivitas){
+                        $return['sukses_aktivitas'] = true;
+                    }else{
+                        $return['sukses_aktivitas'] = false;
+                    }
+                } catch (\Throwable $th) {
+                    $return['sukses_aktivitas'] = false;
+                }
+            }
         }else{
             $return['status'] = 'GAGAL';
             $return['label'] = $label;
@@ -635,6 +1022,16 @@ class KuisController extends Controller
         $kode_kuis = $request->input('kode_kuis');
         $pengguna_id = $request->input('pengguna_id');
         $tampil_jumlah_peserta = $request->input('tampil_jumlah_peserta');
+        $keyword = $request->input('keyword');
+        $sesi = $request->input('sesi') ? $request->input('sesi') : 'umum';
+        $status_privasi = $request->input('status_privasi') ? $request->input('status_privasi') : null;
+        $mata_pelajaran_id = $request->input('mata_pelajaran_id') ? $request->input('mata_pelajaran_id') : null;
+        $jenjang_id = $request->input('jenjang_id') ? $request->input('jenjang_id') : null;
+        $tingkat_pendidikan_id = $request->input('tingkat_pendidikan_id') ? $request->input('tingkat_pendidikan_id') : null;
+        $start = $request->input('start') ? $request->input('start') : 0;
+        $limit = $request->input('limit') ? $request->input('limit') : 20;
+        $tampilkan_pertanyaan = $request->input('tampilkan_pertanyaan') ? $request->input('tampilkan_pertanyaan') : 'Y';
+        $tampilkan_stat = $request->input('tampilkan_stat') ? $request->input('tampilkan_stat') : 'N';
 
         //get sesi kuis
 
@@ -644,6 +1041,7 @@ class KuisController extends Controller
         ->leftJoin('ref.tingkat_pendidikan as tingkat','tingkat.tingkat_pendidikan_id','=','kuis.tingkat_pendidikan_id')
         ->leftJoin('ref.mata_pelajaran as mapel','mapel.mata_pelajaran_id','=','kuis.mata_pelajaran_id')
         ->leftJoin(DB::raw("(select kuis_id, sum(1) as jumlah_pertanyaan from pertanyaan_kuis where soft_delete = 0 group by kuis_id) as jumlah_pertanyaan"),'jumlah_pertanyaan.kuis_id','=','kuis.kuis_id')
+        ->leftJoin(DB::raw("(select * from sesi_kuis where \"soft_delete\" = 0 and \"default\" = 1) as sesi_kuis"),'sesi_kuis.kuis_id','=','kuis.kuis_id')
         ->where('kuis.soft_delete','=',0)
         ->select(
             'kuis.*',
@@ -651,9 +1049,43 @@ class KuisController extends Controller
             'tingkat.nama as tingkat_pendidikan',
             'mapel.nama as mata_pelajaran',
             'pengguna.nama as pengguna',
-            'jumlah_pertanyaan.jumlah_pertanyaan'
+            'jumlah_pertanyaan.jumlah_pertanyaan',
+            'sesi_kuis.kode_sesi'
         )
         ;
+
+        if($tampilkan_stat){
+            $fetch->leftJoin(DB::raw("(SELECT
+                kuis_id,
+                SUM ( 1 ) AS total 
+            FROM
+                pengguna_kuis 
+            WHERE
+                soft_delete = 0
+            GROUP BY
+                kuis_id) as total_pemain"), 'total_pemain.kuis_id','=','kuis.kuis_id')
+            ->leftJoin(DB::raw("(SELECT
+                kuis_id,
+                SUM ( 1 ) AS total 
+            FROM
+                sesi_kuis 
+            WHERE
+                soft_delete = 0
+            GROUP BY
+                kuis_id) as total_sesi"), 'total_sesi.kuis_id','=','kuis.kuis_id')
+            ->select(
+                'kuis.*',
+                'jenjang.nama as jenjang',
+                'tingkat.nama as tingkat_pendidikan',
+                'mapel.nama as mata_pelajaran',
+                'pengguna.nama as pengguna',
+                'jumlah_pertanyaan.jumlah_pertanyaan',
+                'sesi_kuis.kode_sesi',
+                'sesi_kuis.sesi_kuis_id',
+                DB::raw('coalesce(total_pemain.total,0) as total_pemain'),
+                DB::raw('coalesce(total_sesi.total,0) as total_sesi')
+            );
+        }
 
         if($kuis_id){
             $fetch->where('kuis.kuis_id','=',$kuis_id);
@@ -666,6 +1098,27 @@ class KuisController extends Controller
         if($pengguna_id){
             $fetch->where('kuis.pengguna_id','=',$pengguna_id);
         }
+        
+        if($status_privasi){
+            $fetch->where('kuis.status_privasi','=',$status_privasi);
+        }
+        
+        if($mata_pelajaran_id){
+            $fetch->where('kuis.mata_pelajaran_id','=',$mata_pelajaran_id);
+        }
+        
+        if($jenjang_id && (int)$jenjang_id != 99){
+            $fetch->where('kuis.jenjang_id','=',$jenjang_id);
+        }
+        
+        if($tingkat_pendidikan_id && (int)$tingkat_pendidikan_id != 99){
+            $fetch->where('kuis.tingkat_pendidikan_id','=',$tingkat_pendidikan_id);
+        }
+        
+        if($keyword){
+            $fetch->where('kuis.judul','ilike',DB::raw("'%".$keyword."%'"));
+            // $fetch->whereOr('kuis.judul','ilike',"'%".$keyword."%'");
+        }
 
         if($tampil_jumlah_peserta ==  'Y'){
             $fetch->leftJoin(DB::raw("(select kuis_id, sum(1) as total from pengguna_kuis where soft_delete = 0 group by kuis_id) as jumlah_peserta"),'jumlah_peserta.kuis_id','=','kuis.kuis_id');
@@ -676,60 +1129,71 @@ class KuisController extends Controller
                 'mapel.nama as mata_pelajaran',
                 'pengguna.nama as pengguna',
                 'jumlah_pertanyaan.jumlah_pertanyaan',
-                'jumlah_peserta.total as jumlah_peserta'
+                'jumlah_peserta.total as jumlah_peserta',
+                'sesi_kuis.kode_sesi',
+                'sesi_kuis.sesi_kuis_id'
             );
         }
 
         
-        $fetch =  $fetch->orderBy('create_date','DESC')->get();
+        $count =  $fetch->count();
+        $fetch =  $fetch->orderBy('create_date','DESC')->skip($start)->take($limit)->get();
 
 
         for ($iData=0; $iData < sizeof($fetch); $iData++) { 
-            $fetch[$iData]->{'pertanyaan_kuis'} = (object)array();
             
-            $fetch_pertanyaan = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
-            ->where('kuis_id','=',$fetch[$iData]->{'kuis_id'});
-
-            if($sesi_kuis_id){
-                $fetch_sesi_kuis = DB::connection('sqlsrv_2')->table('sesi_kuis')
-                ->where('sesi_kuis_id','=',$sesi_kuis_id)
-                ->get(); 
-
-                if(sizeof($fetch_sesi_kuis) > 0){
-                    if((int)$fetch_sesi_kuis[0]->jawaban_diacak == 1){
-                        $fetch_pertanyaan =  $fetch_pertanyaan->orderBy(DB::raw("random()"),'ASC')->get();
+            if($tampilkan_pertanyaan == 'Y'){
+                
+                $fetch[$iData]->{'pertanyaan_kuis'} = (object)array();
+                
+                $fetch_pertanyaan = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
+                ->where('kuis_id','=',$fetch[$iData]->{'kuis_id'})->where('pertanyaan_kuis.soft_delete','=',0);
+                
+                if($sesi_kuis_id){
+                    $fetch_sesi_kuis = DB::connection('sqlsrv_2')->table('sesi_kuis')
+                    ->where('sesi_kuis_id','=',$sesi_kuis_id)
+                    ->where('sesi_kuis.soft_delete','=',0)
+                    ->get(); 
+    
+                    if(sizeof($fetch_sesi_kuis) > 0){
+                        if((int)$fetch_sesi_kuis[0]->jawaban_diacak == 1){
+                            $fetch_pertanyaan =  $fetch_pertanyaan->orderBy(DB::raw("random()"),'ASC')->get();
+                        }else{
+                            $fetch_pertanyaan =  $fetch_pertanyaan->orderBy('create_date','ASC')->get();
+                        }
                     }else{
                         $fetch_pertanyaan =  $fetch_pertanyaan->orderBy('create_date','ASC')->get();
                     }
                 }else{
                     $fetch_pertanyaan =  $fetch_pertanyaan->orderBy('create_date','ASC')->get();
                 }
-            }else{
-                $fetch_pertanyaan =  $fetch_pertanyaan->orderBy('create_date','ASC')->get();
-            }
-
-            
-            for ($iPertanyaan=0; $iPertanyaan < sizeof($fetch_pertanyaan); $iPertanyaan++) { 
+    
                 
-                $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}} = $fetch_pertanyaan[$iPertanyaan];
+                for ($iPertanyaan=0; $iPertanyaan < sizeof($fetch_pertanyaan); $iPertanyaan++) { 
+                    
+                    $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}} = $fetch_pertanyaan[$iPertanyaan];
+                    
+                    $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}}->{'pilihan_pertanyaan_kuis'} = (object)array();
                 
-                $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}}->{'pilihan_pertanyaan_kuis'} = (object)array();
-            
-                $fetch_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
-                ->where('pertanyaan_kuis_id','=',$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'})->orderBy('create_date','ASC')->get();
-
-                for ($iPilihan=0; $iPilihan < sizeof($fetch_pilihan); $iPilihan++) { 
-                    $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}}->{'pilihan_pertanyaan_kuis'}->{$fetch_pilihan[$iPilihan]->{'pilihan_pertanyaan_kuis_id'}} = $fetch_pilihan[$iPilihan];
-                    // $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}} = $fetch_pilihan[$iPilihan];
+                    $fetch_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
+                    ->where('pertanyaan_kuis_id','=',$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'})
+                    ->where('pilihan_pertanyaan_kuis.soft_delete','=',0)
+                    ->orderBy('create_date','ASC')->get();
+    
+                    for ($iPilihan=0; $iPilihan < sizeof($fetch_pilihan); $iPilihan++) { 
+                        $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}}->{'pilihan_pertanyaan_kuis'}->{$fetch_pilihan[$iPilihan]->{'pilihan_pertanyaan_kuis_id'}} = $fetch_pilihan[$iPilihan];
+                        // $fetch[$iData]->{'pertanyaan_kuis'}->{$fetch_pertanyaan[$iPertanyaan]->{'pertanyaan_kuis_id'}} = $fetch_pilihan[$iPilihan];
+                    }
                 }
-            }
 
-            
+            }else{
+
+            }
 
         }
 
         $return = array();
-        $return['total'] = sizeof($fetch);
+        $return['total'] = $count;
         $return['rows'] = $fetch;
 
         return $return;
@@ -740,6 +1204,8 @@ class KuisController extends Controller
         $data = $request->all();
         $gambar_kuis = $request->input('gambar_kuis') ? $request->input('gambar_kuis') : rand(1,8).".jpg";
         $ruang_id = $request->input('ruang_id') ? $request->input('ruang_id') : null;
+        $status_privasi = $request->input('status_privasi') ? $request->input('status_privasi') : 1;
+        $simpan_pertanyaan = $request->input('simpan_pertanyaan') ? $request->input('simpan_pertanyaan') : 'Y';
         // return $data;die;
 
         if($request->input('jenjang_id')){
@@ -782,7 +1248,9 @@ class KuisController extends Controller
                 'tingkat_pendidikan_id'=> $tingkat_pendidikan_id,
                 'mata_pelajaran_id'=> $mata_pelajaran_id,
                 'gambar_kuis' => $gambar_kuis,
-                'last_update' => date('Y-m-d H:i:s')
+                'last_update' => date('Y-m-d H:i:s'),
+                'status_privasi' => $status_privasi,
+                'a_boleh_assign' => $data['a_boleh_assign']
             ]);
             
             $label = 'UPDATE';
@@ -804,7 +1272,9 @@ class KuisController extends Controller
                 'kode_kuis' => RuangController::generateRandomString(10),
                 'gambar_kuis' => $gambar_kuis,
                 'create_date' => date('Y-m-d H:i:s'),
-                'last_update' => date('Y-m-d H:i:s')
+                'last_update' => date('Y-m-d H:i:s'),
+                'status_privasi' => $status_privasi,
+                'a_boleh_assign' => $data['a_boleh_assign']
             ]);
 
             $label = 'INSERT';
@@ -815,80 +1285,85 @@ class KuisController extends Controller
 
             //simpan pertanyaan kuisnya
             // return "berhasil simpan kuis";
-            foreach ($data['pertanyaan_kuis'] as $key => $value) {
-                $query_cek_pertanyaan_kuis = DB::connection('sqlsrv_2')
-                                                ->table('pertanyaan_kuis')
-                                                ->where('pertanyaan_kuis_id','=', $value['pertanyaan_kuis_id'])
-                                                ->get();
-                
-                if(sizeof($query_cek_pertanyaan_kuis) > 0){
-                    //update
-                    $exePertanyaanKuis = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
-                    ->where('pertanyaan_kuis_id','=',$value['pertanyaan_kuis_id'])
-                    ->update([
-                        'teks' => $value['teks'],
-                        'pengguna_id' => $data['pengguna_id'],
-                        'tanggal' => date('Y-m-d H:i:s'),
-                        'kuis_id' => $data['kuis_id'],
-                        'last_update' => date('Y-m-d H:i:s')
-                    ]);
+            if($simpan_pertanyaan == 'Y'){
 
-                }else{
-                    //insert
-                    $exePertanyaanKuis = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
-                    ->insert([
-                        'pertanyaan_kuis_id' => $value['pertanyaan_kuis_id'],
-                        'teks' => $value['teks'],
-                        'pengguna_id' => $data['pengguna_id'],
-                        'tanggal' => date('Y-m-d H:i:s'),
-                        'kuis_id' => $data['kuis_id'],
-                        'create_date' => date('Y-m-d H:i:s'),
-                        'last_update' => date('Y-m-d H:i:s')
-                    ]);
-
-                }
-
-                if($exePertanyaanKuis){
+                foreach ($data['pertanyaan_kuis'] as $key => $value) {
+                    $query_cek_pertanyaan_kuis = DB::connection('sqlsrv_2')
+                                                    ->table('pertanyaan_kuis')
+                                                    ->where('pertanyaan_kuis_id','=', $value['pertanyaan_kuis_id'])
+                                                    ->get();
                     
-                    foreach ($value['pilihan_pertanyaan_kuis'] as $keyPilihan => $valuePilihan) {
-                        $query_cek_pilihan = DB::connection('sqlsrv_2')
-                                            ->table('pilihan_pertanyaan_kuis')
-                                            ->where('pilihan_pertanyaan_kuis_id','=', $valuePilihan['pilihan_pertanyaan_kuis_id'])
-                                            ->get();
-                        
-                        if(sizeof($query_cek_pilihan) > 0){
-                            //update
-                            $exePilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
-                            ->where('pilihan_pertanyaan_kuis_id','=', $valuePilihan['pilihan_pertanyaan_kuis_id'])
-                            ->update([
-                                'teks' => $valuePilihan['teks'],
-                                'pengguna_id' => $data['pengguna_id'],
-                                'pertanyaan_kuis_id' => $value['pertanyaan_kuis_id'],
-                                'jawaban_benar' => $valuePilihan['jawaban_benar'],
-                                'last_update' =>date('Y-m-d H:i:s')
-                            ]);
-
-                        }else{
-                            //insert
-                            $exePilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
-                            ->insert([
-                                'pilihan_pertanyaan_kuis_id' => $valuePilihan['pilihan_pertanyaan_kuis_id'],
-                                'teks' => $valuePilihan['teks'],
-                                'pengguna_id' => $data['pengguna_id'],
-                                'pertanyaan_kuis_id' => $value['pertanyaan_kuis_id'],
-                                'jawaban_benar' => $valuePilihan['jawaban_benar'],
-                                'create_date' => date('Y-m-d H:i:s'),
-                                'last_update' => date('Y-m-d H:i:s')
-                            ]);
-
-                        }
+                    if(sizeof($query_cek_pertanyaan_kuis) > 0){
+                        //update
+                        $exePertanyaanKuis = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
+                        ->where('pertanyaan_kuis_id','=',$value['pertanyaan_kuis_id'])
+                        ->update([
+                            'teks' => $value['teks'],
+                            'pengguna_id' => $data['pengguna_id'],
+                            'tanggal' => date('Y-m-d H:i:s'),
+                            'kuis_id' => $data['kuis_id'],
+                            'last_update' => date('Y-m-d H:i:s')
+                        ]);
+    
+                    }else{
+                        //insert
+                        $exePertanyaanKuis = DB::connection('sqlsrv_2')->table('pertanyaan_kuis')
+                        ->insert([
+                            'pertanyaan_kuis_id' => $value['pertanyaan_kuis_id'],
+                            'teks' => $value['teks'],
+                            'pengguna_id' => $data['pengguna_id'],
+                            'tanggal' => date('Y-m-d H:i:s'),
+                            'kuis_id' => $data['kuis_id'],
+                            'create_date' => date('Y-m-d H:i:s'),
+                            'last_update' => date('Y-m-d H:i:s')
+                        ]);
+    
                     }
-
-                }else{
-                    //gagal tambah pertanyaan kuis
+    
+                    if($exePertanyaanKuis){
+                        
+                        foreach ($value['pilihan_pertanyaan_kuis'] as $keyPilihan => $valuePilihan) {
+                            $query_cek_pilihan = DB::connection('sqlsrv_2')
+                                                ->table('pilihan_pertanyaan_kuis')
+                                                ->where('pilihan_pertanyaan_kuis_id','=', $valuePilihan['pilihan_pertanyaan_kuis_id'])
+                                                ->get();
+                            
+                            if(sizeof($query_cek_pilihan) > 0){
+                                //update
+                                $exePilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
+                                ->where('pilihan_pertanyaan_kuis_id','=', $valuePilihan['pilihan_pertanyaan_kuis_id'])
+                                ->update([
+                                    'teks' => $valuePilihan['teks'],
+                                    'pengguna_id' => $data['pengguna_id'],
+                                    'pertanyaan_kuis_id' => $value['pertanyaan_kuis_id'],
+                                    'jawaban_benar' => $valuePilihan['jawaban_benar'],
+                                    'last_update' =>date('Y-m-d H:i:s')
+                                ]);
+    
+                            }else{
+                                //insert
+                                $exePilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
+                                ->insert([
+                                    'pilihan_pertanyaan_kuis_id' => $valuePilihan['pilihan_pertanyaan_kuis_id'],
+                                    'teks' => $valuePilihan['teks'],
+                                    'pengguna_id' => $data['pengguna_id'],
+                                    'pertanyaan_kuis_id' => $value['pertanyaan_kuis_id'],
+                                    'jawaban_benar' => $valuePilihan['jawaban_benar'],
+                                    'create_date' => date('Y-m-d H:i:s'),
+                                    'last_update' => date('Y-m-d H:i:s')
+                                ]);
+    
+                            }
+                        }
+    
+                    }else{
+                        //gagal tambah pertanyaan kuis
+                    }
+    
                 }
-
+                
             }
+
 
             //tambah sesi kuis umum
             if($label == 'INSERT'){
@@ -939,7 +1414,8 @@ class KuisController extends Controller
 
             return response(
                 [
-                    'success' => ($exe ? ($exeSesiKuis ? true : false) : false),
+                    'success' => true,
+                    // 'success' => ($exe ? ($exeSesiKuis ? true : false) : false),
                     'kuis_id' => $data['kuis_id']
                 ],
                 200

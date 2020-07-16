@@ -36,6 +36,20 @@ Route::prefix('Notifikasi')->group(function () {
 	Route::post('getNotifikasi', 'NotifikasiController@getNotifikasi');
 });
 
+Route::prefix('Linimasa')->group(function () {
+	Route::post('getLinimasa', 'LinimasaController@getLinimasa');
+});
+
+Route::prefix('Aktivitas')->group(function () {
+	Route::post('getAktivitas', 'AktivitasController@getAktivitas');
+});
+
+Route::prefix('Pengikut')->group(function () {
+	Route::post('simpanPengikut', 'PengikutController@simpanPengikut');
+	Route::post('getPengikut', 'PengikutController@getPengikut');
+	Route::post('cekMengikuti', 'PengikutController@cekMengikuti');
+});
+
 Route::prefix('Kuis')->group(function () {
 	Route::post('generateUUID', 'KuisController@generateUUID');
 	Route::post('getKuis', 'KuisController@getKuis');
@@ -52,6 +66,11 @@ Route::prefix('Kuis')->group(function () {
 	Route::post('getLaporanHasilKuis', 'KuisController@getLaporanHasilKuis');
 	Route::get('getLaporanHasilKuis', 'KuisController@getLaporanHasilKuis');
 	Route::post('hapusSesiKuis', 'KuisController@hapusSesiKuis');
+	Route::post('hapusKuis', 'KuisController@hapusKuis');
+	Route::post('aktivitasKuis', 'KuisController@aktivitasKuis');
+	Route::post('simpanPertanyaanKuis', 'KuisController@simpanPertanyaanKuis');
+	Route::post('getStatKuis', 'KuisController@getStatKuis');
+	Route::post('uploadAudio', 'KuisController@uploadAudio');
 	// Route::get('getLaporanHasilKuis_excel', 'KuisController@getLaporanHasilKuis_excel');
 });
 
@@ -67,6 +86,10 @@ Route::prefix('Ruang')->group(function () {
 	Route::post('hapusRuang', 'RuangController@hapusRuang');
 });
 
+Route::prefix('Sekolah')->group(function () {
+	Route::post('simpanSekolah', 'SekolahController@simpanSekolah');
+});
+
 
 Route::prefix('Ref')->group(function () {
 	Route::post('getJenjang', 'RefController@getJenjang');
@@ -79,6 +102,7 @@ Route::prefix('Otentikasi')->group(function () {
 	Route::post('getPengguna', 'PenggunaController@getPengguna');
 	Route::post('simpanPengguna', 'PenggunaController@simpanPengguna');
 	Route::post('buatPengguna', 'PenggunaController@buatPengguna');
+	Route::post('daftarPengguna', 'PenggunaController@daftarPengguna');
 	Route::post('upload', 'PenggunaController@upload');
 });
 
@@ -90,6 +114,9 @@ Route::get('/clear-cache', function() {
 Route::prefix('app')->group(function () {
 	Route::post('getWilayah', 'AppController@getWilayah');
 	Route::post('getGeoJsonBasic', 'AppController@getGeoJsonBasic');
+	Route::post('getMapel', 'AppController@getMapel');
+	Route::post('getStatistik', 'AppController@getStatistik');
+	Route::post('getStatEmpu', 'AppController@getStatEmpu');
 });
 
 Route::middleware('token')->group(function(){

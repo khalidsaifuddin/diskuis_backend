@@ -13,6 +13,256 @@ class AppController extends Controller
     	# code...
 	}
 
+	static function getStatEmpu(Request $request){
+		$sql = "SELECT * FROM (
+				SELECT
+					base_tanggal.tanggal,
+					COALESCE ( total_pengguna_baru, 0 ) AS total_pengguna_baru,
+					COALESCE ( kuis_baru_total, 0 ) AS kuis_baru_total,
+					COALESCE ( kuis_baru_rilis, 0 ) AS kuis_baru_rilis,
+					COALESCE ( kuis_baru_draft, 0 ) AS kuis_baru_draft,
+					COALESCE ( peserta_kuis_total, 0 ) AS peserta_kuis_total,
+					COALESCE ( ruang_baru_total, 0 ) AS ruang_baru_total 
+				FROM
+					(
+					SELECT SUBSTRING
+						( CAST ( tanggal AS VARCHAR ( 100 )), 1, 10 ) AS tanggal 
+					FROM
+						(
+						SELECT
+							now() AS tanggal UNION
+						SELECT
+							now() - INTERVAL '1' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '2' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '3' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '4' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '5' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '6' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '7' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '8' DAY AS tanggal UNION
+						SELECT
+							now() - INTERVAL '9' DAY AS tanggal 
+						) kumpulan_tanggal 
+					ORDER BY
+						tanggal DESC 
+					) base_tanggal
+					LEFT JOIN (
+					SELECT
+						tanggal,
+						SUM ( 1 ) AS total_pengguna_baru 
+					FROM
+						( SELECT SUBSTRING ( CAST ( create_date AS VARCHAR ( 100 )), 1, 10 ) AS tanggal,* FROM pengguna WHERE soft_delete = 0 ) penggunas 
+					GROUP BY
+						tanggal 
+					) penggunass ON penggunass.tanggal = base_tanggal.tanggal
+					LEFT JOIN (
+					SELECT
+						tanggal,
+						SUM ( 1 ) AS kuis_baru_total,
+						SUM ( CASE WHEN kuiss.publikasi = 1 THEN 1 ELSE 0 END ) AS kuis_baru_rilis,
+						SUM ( CASE WHEN kuiss.publikasi = 0 THEN 1 ELSE 0 END ) AS kuis_baru_draft 
+					FROM
+						( SELECT SUBSTRING ( CAST ( create_date AS VARCHAR ( 100 )), 1, 10 ) AS tanggal,* FROM kuis WHERE soft_delete = 0 ) kuiss 
+					GROUP BY
+						tanggal 
+					) kuisss ON base_tanggal.tanggal = kuisss.tanggal
+					LEFT JOIN (
+					SELECT
+						tanggal,
+						SUM ( 1 ) AS peserta_kuis_total 
+					FROM
+						(
+						SELECT SUBSTRING
+							( CAST ( pengguna_kuis.create_date AS VARCHAR ( 100 )), 1, 10 ) AS tanggal,* 
+						FROM
+							pengguna_kuis
+							JOIN kuis ON kuis.kuis_id = pengguna_kuis.kuis_id 
+						WHERE
+							kuis.soft_delete = 0 
+							AND pengguna_kuis.soft_delete = 0 
+							AND kuis.publikasi = 1 
+						) kuiss 
+					GROUP BY
+						tanggal 
+					) pengguna_kuisss ON base_tanggal.tanggal = pengguna_kuisss.tanggal
+					LEFT JOIN (
+					SELECT
+						tanggal,
+						SUM ( 1 ) AS ruang_baru_total 
+					FROM
+						( SELECT SUBSTRING ( CAST ( create_date AS VARCHAR ( 100 )), 1, 10 ) AS tanggal,* FROM ruang WHERE soft_delete = 0 ) ruangs 
+					GROUP BY
+						tanggal 
+					) ruangss ON base_tanggal.tanggal = ruangss.tanggal 
+				ORDER BY
+					base_tanggal.tanggal DESC 
+					LIMIT 10
+				) abc ORDER BY tanggal ASC";
+		
+		$sql2 = "
+				SELECT * FROM (
+				SELECT SUBSTRING
+					( CAST ( tanggal AS VARCHAR ( 100 )), 1, 10 ) AS tanggal,
+					(select sum(1) as total_pengguna from pengguna where soft_delete = 0 and create_date <= tanggal),
+					(select sum(1) as total_kuis from kuis where soft_delete = 0 and create_date <= tanggal),
+					(select sum(1) as total_ruang from ruang where soft_delete = 0 and create_date <= tanggal),
+					(select sum(1) as total_peserta_kuis from pengguna_kuis peserta_kuis join kuis on kuis.kuis_id = peserta_kuis.kuis_id where peserta_kuis.soft_delete = 0 and kuis.soft_delete = 0 and kuis.publikasi = 1 and peserta_kuis.create_date <= tanggal)
+				FROM
+					(
+					SELECT
+						now() AS tanggal UNION
+					SELECT
+						now() - INTERVAL '1' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '2' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '3' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '4' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '5' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '6' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '7' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '8' DAY AS tanggal UNION
+					SELECT
+						now() - INTERVAL '9' DAY AS tanggal 
+					) kumpulan_tanggal 
+				ORDER BY
+					tanggal DESC
+				) acdc ORDER BY tanggal ASC";
+
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+		$fetch2 = DB::connection('sqlsrv_2')->select(DB::raw($sql2));
+
+		$return = array();
+		$return['diskrit'] = $fetch;
+		$return['kumulatif'] = $fetch2;
+
+		return $return;
+	}
+
+	static function getStatistik(Request $request){
+		$pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+		$sql = "SELECT * FROM (SELECT
+					1 as urut,
+					'kuis' AS label,
+					COALESCE(SUM ( 1 ),0) as jumlah
+				FROM
+					kuis 
+				WHERE
+					pengguna_id = '{$pengguna_id}' 
+					AND soft_delete = 0
+				UNION
+				SELECT
+					2 as urut,
+					'ruang' AS label,
+					COALESCE(SUM ( 1 ),0) as jumlah
+				FROM
+					ruang 
+				WHERE
+					pengguna_id = '{$pengguna_id}' 
+					AND soft_delete = 0
+				UNION
+				SELECT
+					3 as urut,
+					'kuis_diikuti' AS label,
+					COALESCE(SUM ( 1 ),0) as jumlah
+				FROM
+					pengguna_kuis
+				join kuis on kuis.kuis_id = pengguna_kuis.kuis_id	
+				WHERE
+					kuis.pengguna_id = '{$pengguna_id}' 
+					AND kuis.soft_delete = 0
+					AND pengguna_kuis.soft_delete = 0
+				UNION
+				SELECT
+					4 as urut,
+					'ruang_diikuti' AS label,
+					COALESCE(SUM ( 1 ),0) as jumlah
+				FROM
+					pengguna_ruang
+				join ruang on ruang.ruang_id = pengguna_ruang.ruang_id
+				WHERE
+					ruang.pengguna_id = '{$pengguna_id}' 
+					AND ruang.soft_delete = 0
+					AND pengguna_ruang.soft_delete = 0
+				UNION	
+				SELECT
+					5 as urut,
+					'kuis_diikuti_hari_ini' AS label,
+					COALESCE(SUM ( 1 ),0) as jumlah
+				FROM
+					pengguna_kuis
+				join kuis on kuis.kuis_id = pengguna_kuis.kuis_id	
+				WHERE
+					kuis.pengguna_id = '{$pengguna_id}' 
+					AND kuis.soft_delete = 0
+					AND pengguna_kuis.soft_delete = 0
+					AND pengguna_kuis.create_date > '".date('Y-m-d')." 00:00:00'
+				UNION
+				SELECT
+					6 as urut,
+					'ruang_diikuti_hari_ini' AS label,
+					COALESCE(SUM ( 1 ),0) as jumlah
+				FROM
+					pengguna_ruang
+				join ruang on ruang.ruang_id = pengguna_ruang.ruang_id
+				WHERE
+					ruang.pengguna_id = '{$pengguna_id}' 
+					AND ruang.soft_delete = 0
+					AND pengguna_ruang.soft_delete = 0
+					AND pengguna_ruang.create_date > '".date('Y-m-d')." 00:00:00'
+				) stat_all order by stat_all.urut asc";
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+		return $fetch;
+	}
+
+	static function getMapel(Request $request){
+		$mata_pelajaran_id = $request->mata_pelajaran_id ? $request->mata_pelajaran_id : null;
+		$limit = $request->limit ? $request->limit : null;
+		$trending = $request->trending ? $request->trending : null;
+		
+		$fetch = DB::connection('sqlsrv_2')
+		->table('ref.mata_pelajaran')
+		->leftJoin(DB::raw("(select mata_pelajaran_id, COALESCE(total,0) as total from (select mata_pelajaran_id, sum(1) as total from kuis where soft_delete = 0 and publikasi = 1 and status_privasi = 1 and pengguna_id is not null group by mata_pelajaran_id) as kuisnya) as kuisnya"), 'kuisnya.mata_pelajaran_id','=','ref.mata_pelajaran.mata_pelajaran_id')
+		->whereNull('expired_date')
+		->select(
+			'ref.mata_pelajaran.*',
+			'kuisnya.total'
+			// DB::raw('COALESCE(kuisnya.total,0) as total')
+		)
+		;
+
+		if($mata_pelajaran_id){
+			$fetch->where('ref.mata_pelajaran.mata_pelajaran_id','=',$mata_pelajaran_id);
+		}
+		
+		if($limit){
+			$fetch->take($limit);
+		}
+		
+		if($trending){
+			$fetch->orderBy(DB::raw('COALESCE(kuisnya.total,0)'),'DESC');
+		}else{
+			$fetch->orderBy('ref.mata_pelajaran.nama', 'ASC');
+		}
+
+		// return $fetch->toSql();die;
+
+		return $fetch->get();
+	}
+
     public function getWilayah(Request $request){
         $kode_wilayah = $request->input('kode_wilayah') ? $request->input('kode_wilayah') : null;
         $id_level_wilayah = $request->input('id_level_wilayah') ? $request->input('id_level_wilayah') : null;

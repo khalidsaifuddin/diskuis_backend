@@ -15,6 +15,8 @@ use Tymon\JWTAuth\Facades\JWTFactory;
 // use PhpOffice\PhpSpreadsheet\Spreadsheet;
 // use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
+// use App\Http\Controllers\RuangController;
+
 class PenggunaController extends Controller
 {
     static public function generateUUID()
@@ -25,6 +27,53 @@ class PenggunaController extends Controller
         ->first();
 
         return $uuid->{'uuid'};
+    }
+
+    static function daftarPengguna(Request $request){
+        $username = $request->input('username');
+        $password = $request->input('password');
+        $nama = $request->input('nama');
+        $pengguna_id = self::generateUUID();
+        
+        $return = array();
+
+        $fetch_cek = DB::connection('sqlsrv_2')->table('pengguna')
+        ->where('username','=',$username)
+        ->where('soft_delete','=',0)
+        ->get();
+
+        if(sizeof($fetch_cek) > 0){
+            //sudah ada
+            $return['sukses'] = false;
+            $return['pesan'] = 'Pengguna dengan username '.$username.' telah terdaftar. Silakan gunakan username yang lain';
+
+        }else{
+            //belum ada
+            $exe = DB::connection('sqlsrv_2')->table('pengguna')->insert([
+                'pengguna_id' => $pengguna_id,
+                'nama' => $nama,
+                'username' => $username,
+                'password' => md5($password),
+                'soft_delete' => '0',
+                'gambar' => 'https://be.diskuis.id/assets/img/diskuis_avatar.jpg',
+                'aktif' => '1',
+                'create_date' => DB::raw('now()::timestamp(0)'),
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'verified' => '10'
+            ]);
+
+            if($exe){
+                $return['sukses'] = true;
+                $return['pesan'] = 'Berhasil menambah pengguna baru';
+                $return['username'] = $username;
+                $return['password'] = $password;
+            }else{
+                $return['sukses'] = true;
+                $return['pesan'] = 'Gagal menambah pengguna baru';
+            }
+        }
+
+        return $return;
     }
 
     public function buatPengguna(Request $request){
@@ -119,6 +168,8 @@ class PenggunaController extends Controller
         $username = $request->input('username') ? $request->input('username') : null;
         $start = $request->input('start') ? $request->input('start') : 0;
         $limit = $request->input('limit') ? $request->input('limit') : 20;
+        $keyword = $request->input('keyword') ? $request->input('keyword') : null;
+        $pengguna_id_pengikut = $request->input('pengguna_id_pengikut') ? $request->input('pengguna_id_pengikut') : null;
 
         if($pengguna_id){
             $user = DB::connection('sqlsrv_2')
@@ -178,8 +229,25 @@ class PenggunaController extends Controller
             ->take($limit)->get();
         }
 
+        if($keyword){
+            $user = DB::connection('sqlsrv_2')
+            ->table(DB::raw('pengguna'))
+            ->leftJoin('ref.peran as peran','peran.peran_id','=','pengguna.peran_id')
+            ->leftJoin('ref.mst_wilayah as wilayah', 'wilayah.kode_wilayah','=','pengguna.kode_wilayah')
+            ->leftJoin(DB::raw("(select * from pengikut_pengguna where pengguna_id_pengikut = '".$pengguna_id_pengikut."' and soft_delete = 0) as pengikuts"), 'pengikuts.pengguna_id','=','pengguna.pengguna_id')
+            ->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+            ->where('pengguna.soft_delete', '=', 0)
+            ->select(
+                'pengguna.*',
+                'peran.nama as peran',
+                'wilayah.nama as wilayah',
+                'pengikuts.pengguna_id as validasi_pengikut'
+            )
+            ->get();
+        }
+
         $return = array();
-        $return['total'] = ($pengguna_id || $username ? sizeof($user) : $count->total);
+        $return['total'] = ($pengguna_id || $username || $keyword ? sizeof($user) : $count->total);
         $return['rows'] = $user;
         
         return $return;

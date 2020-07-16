@@ -13,6 +13,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 use Tymon\JWTAuth\Facades\JWTFactory;
 
 use App\Http\Controllers\PertanyaanController;
+use App\Http\Controllers\LinimasaController;
 
 class RuangController extends Controller
 {
@@ -39,53 +40,90 @@ class RuangController extends Controller
     static public function simpanPertanyaanRuang(Request $request){
         $ruang_id = $request->input('ruang_id');
         $pengguna_id = $request->input('pengguna_id');
+        $pertanyaan_id = $request->input('pertanyaan_id') ? $request->input('pertanyaan_id') : null;
         $arrPertanyaan = $request->input('arrPertanyaan') ? json_decode($request->input('arrPertanyaan')) : null;
 
         $berhasil = 0;
         $gagal = 0;
         $skip = 0;
 
-        for ($iPertanyaan=0; $iPertanyaan < sizeof($arrPertanyaan); $iPertanyaan++) { 
+        if($pertanyaan_id != null){
+            $fetch_cek = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')
+            ->where('ruang_id','=', $ruang_id)
+            ->where('pertanyaan_id','=', $pertanyaan_id)
+            ->get();
 
-            if($arrPertanyaan[$iPertanyaan]->status == true){
-                $fetch_cek = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')
+            if(sizeof($fetch_cek) > 0){
+                //sudah ada
+                $exe = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')
                 ->where('ruang_id','=', $ruang_id)
-                ->where('pertanyaan_id','=', $arrPertanyaan[$iPertanyaan]->pertanyaan_id)
-                ->get();
-
-                if(sizeof($fetch_cek) > 0){
-                    //sudah ada
-                    $exe = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')
-                    ->where('ruang_id','=', $ruang_id)
-                    ->where('pertanyaan_id','=', $arrPertanyaan[$iPertanyaan]->pertanyaan_id)
-                    ->update([
-                        'last_update' => DB::raw('now()'),
-                        'soft_delete' => 0
-                    ]); 
-
-                }else{
-                    //belum ada
-                    $exe = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')->insert([
-                        'ruang_id' => $ruang_id,
-                        'pengguna_id' => $pengguna_id,
-                        'pertanyaan_id' => $arrPertanyaan[$iPertanyaan]->pertanyaan_id
-                        // 'pertanyaan_id' => $arrPertanyaan[$iPertanyaan],
-                    ]);
-                }
-
-                if($exe){
-                    $berhasil++;
-                }else{
-                    $gagal++;
-                }
+                ->where('pertanyaan_id','=', $pertanyaan_id)
+                ->update([
+                    'last_update' => DB::raw('now()'),
+                    'soft_delete' => 0
+                ]); 
 
             }else{
-
-                //nggak dipilih. yaudah skip
-                $skip++;
+                //belum ada
+                $exe = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')->insert([
+                    'ruang_id' => $ruang_id,
+                    'pengguna_id' => $pengguna_id,
+                    'pertanyaan_id' => $pertanyaan_id
+                    // 'pertanyaan_id' => $arrPertanyaan[$iPertanyaan],
+                ]);
             }
 
+            if($exe){
+                $berhasil++;
+            }else{
+                $gagal++;
+            }
+
+        }else{
+
+            for ($iPertanyaan=0; $iPertanyaan < sizeof($arrPertanyaan); $iPertanyaan++) { 
+    
+                if($arrPertanyaan[$iPertanyaan]->status == true){
+                    $fetch_cek = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')
+                    ->where('ruang_id','=', $ruang_id)
+                    ->where('pertanyaan_id','=', $arrPertanyaan[$iPertanyaan]->pertanyaan_id)
+                    ->get();
+    
+                    if(sizeof($fetch_cek) > 0){
+                        //sudah ada
+                        $exe = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')
+                        ->where('ruang_id','=', $ruang_id)
+                        ->where('pertanyaan_id','=', $arrPertanyaan[$iPertanyaan]->pertanyaan_id)
+                        ->update([
+                            'last_update' => DB::raw('now()'),
+                            'soft_delete' => 0
+                        ]); 
+    
+                    }else{
+                        //belum ada
+                        $exe = DB::connection('sqlsrv_2')->table('pertanyaan_ruang')->insert([
+                            'ruang_id' => $ruang_id,
+                            'pengguna_id' => $pengguna_id,
+                            'pertanyaan_id' => $arrPertanyaan[$iPertanyaan]->pertanyaan_id
+                            // 'pertanyaan_id' => $arrPertanyaan[$iPertanyaan],
+                        ]);
+                    }
+    
+                    if($exe){
+                        $berhasil++;
+                    }else{
+                        $gagal++;
+                    }
+    
+                }else{
+    
+                    //nggak dipilih. yaudah skip
+                    $skip++;
+                }
+    
+            }
         }
+
 
         return '{"status": true, "berhasil": '.$berhasil.', "gagal": '.$gagal.', "skip": '.$skip.'}';
     }
@@ -123,6 +161,22 @@ class RuangController extends Controller
             $return['ruang_id'] = $ruang_id;
             $return['pengguna_id'] = $pengguna_id;
             $return['rows'] = DB::connection('sqlsrv_2')->table('pengguna_ruang')->where('pengguna_id','=',$pengguna_id)->where('ruang_id','=',$ruang_id)->first();
+
+            //simpan linimasa
+            try {
+                //code...
+                $linimasa_id = self::generateUUID();
+                $linimasa = LinimasaController::simpanLinimasa($linimasa_id, $pengguna_id, 1, '','',$ruang_id,null);
+    
+                if($linimasa){
+                    $return['sukses_linimasa'] = true;
+                }else{
+                    $return['sukses_linimasa'] = false;
+                }
+            } catch (\Throwable $th) {
+                $return['sukses_linimasa'] = false;
+            }
+
         }else{
             $return['sukses'] = false;
             $return['rows'] = [];
@@ -233,6 +287,7 @@ class RuangController extends Controller
     {
         $data = $request->all();
         $file = $data['image'];
+        $guid = $data['guid'];
         // $pengguna_id = $data['pengguna_id'];
         // $jenis = $data['jenis'];
 
@@ -243,8 +298,16 @@ class RuangController extends Controller
         $ext = $file->getClientOriginalExtension();
         $name = $file->getClientOriginalName();
 
+        // $uuid = DB::connection('sqlsrv_2')->select(DB::raw("select uuid_generate_v4() as uui from ruang limit 1"));
+
         $destinationPath = base_path('/public/assets/berkas');
-        $upload = $file->move($destinationPath, $name);
+        // $upload = $file->move($destinationPath, $name);
+        $upload = $file->move($destinationPath, $guid.".".$ext);
+
+        // $ext = $file->getClientOriginalExtension();
+        // $name = $file->getClientOriginalName();
+
+        // $destinationPath = base_path('/public/assets/berkas');
 
         $msg = $upload ? 'sukses' : 'gagal';
 
@@ -254,7 +317,7 @@ class RuangController extends Controller
             // ]);
 
             // if($execute){
-            return response(['msg' => $msg, 'filename' => "/assets/berkas/".$name]);
+            return response(['msg' => $msg, 'filename' => "/assets/berkas/".$guid.".".$ext]);
             // }
         }
 

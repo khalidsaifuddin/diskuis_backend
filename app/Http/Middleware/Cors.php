@@ -26,6 +26,8 @@ class Cors
             "http://192.168.0.104:3000",
             "http://test.one",
             "http://app.diskuis.id",
+            "https://app.diskuis.id",
+            // "http://gamemaster.diskuis.id/",
             null
         ];
         

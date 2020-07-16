@@ -241,25 +241,44 @@ class PertanyaanController extends Controller
         $konten = $request->input('konten');
         $publikasi = $request->input('publikasi');
         $pengguna_id = $request->input('pengguna_id');
-        $pertanyaan_id = self::generateUUID();
+        $pertanyaan_id = $request->input('pertanyaan_id') ? $request->input('pertanyaan_id') : null;
         $topik_pertanyaan_id = $request->input('topik_pertanyaan_id');
         
         $return = array();
 
-        $insert = DB::connection('sqlsrv_2')->table('pertanyaan')->insert([
-            'pertanyaan_id' => $pertanyaan_id,
-            'judul' => $judul,
-            'konten' => $konten,
-            'publikasi' => $publikasi,
-            'pengguna_id' => $pengguna_id,
-            'topik_pertanyaan_id' => $topik_pertanyaan_id
-        ]);
+        if($pertanyaan_id){
+            //edit
+            $insert = DB::connection('sqlsrv_2')->table('pertanyaan')
+            ->where('pertanyaan_id','=',$pertanyaan_id)
+            ->update([
+                'konten' => $konten,
+                'judul' => $judul,
+                'topik_pertanyaan_id' => $topik_pertanyaan_id,
+                'last_update' => DB::raw('now()::timestamp(0)')
+            ]);
+            
+        }else{
+            //insert
+            $pertanyaan_id = self::generateUUID();
+            
+            $insert = DB::connection('sqlsrv_2')->table('pertanyaan')->insert([
+                'pertanyaan_id' => $pertanyaan_id,
+                'judul' => $judul,
+                'konten' => $konten,
+                'publikasi' => $publikasi,
+                'pengguna_id' => $pengguna_id,
+                'topik_pertanyaan_id' => $topik_pertanyaan_id
+            ]);
+        }
+
 
         if($insert){
             $return['sukses'] = true;
+            $return['pertanyaan_id'] = $pertanyaan_id;
             $return['rows'] = DB::connection('sqlsrv_2')->table('pertanyaan')->where('pertanyaan_id','=',$pertanyaan_id)->first();
         }else{
             $return['sukses'] = false;
+            $return['pertanyaan_id'] = $pertanyaan_id;
             $return['rows'] = [];
         }
 
