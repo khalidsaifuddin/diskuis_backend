@@ -15,7 +15,7 @@ use Tymon\JWTAuth\Facades\JWTFactory;
 // use PhpOffice\PhpSpreadsheet\Spreadsheet;
 // use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-// use App\Http\Controllers\RuangController;
+use App\Http\Controllers\RuangController;
 
 class PenggunaController extends Controller
 {
@@ -27,6 +27,70 @@ class PenggunaController extends Controller
         ->first();
 
         return $uuid->{'uuid'};
+    }
+
+    static function simpanPengaturanPengguna(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $pengaturan_pengguna_id = $request->pengaturan_pengguna_id ? $request->pengaturan_pengguna_id : RuangController::generateUUID();
+
+        $fetch_cek = DB::connection('sqlsrv_2')->table('pengaturan_pengguna')
+        ->where('pengaturan_pengguna.pengguna_id','=',$pengguna_id)
+        ->where('pengaturan_pengguna.soft_delete','=',0)
+        ->get();
+
+        if(sizeof($fetch_cek) > 0){
+            //siudah ada
+            $exe = DB::connection('sqlsrv_2')->table('pengaturan_pengguna')
+            ->where('pengaturan_pengguna.pengguna_id','=',$pengguna_id)
+            ->where('pengaturan_pengguna.soft_delete','=',0)
+            ->update([
+                'tampilkan_beranda_sekolah' => $request->tampilkan_beranda_sekolah ? $request->tampilkan_beranda_sekolah : '0',
+                'hide_menu_sekolah' => $request->hide_menu_sekolah ? $request->hide_menu_sekolah : '0',
+                'last_update' => DB::raw('now()::timestamp(0)'),
+            ]);
+        }else{
+            //belum ada
+            $exe = DB::connection('sqlsrv_2')->table('pengaturan_pengguna')
+            ->insert([
+                'pengaturan_pengguna_id' => $pengaturan_pengguna_id,
+                'pengguna_id' => $pengguna_id,
+                'tampilkan_beranda_sekolah' => $request->tampilkan_beranda_sekolah ? $request->tampilkan_beranda_sekolah : '0',
+                'hide_menu_sekolah' => $request->hide_menu_sekolah ? $request->hide_menu_sekolah : '0',
+                'create_date' => DB::raw('now()::timestamp(0)'),
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => '0',    
+            ]);
+        }
+
+        return response(
+            [
+                'sukses' => ($exe ? true : false),
+                'rows' => DB::connection('sqlsrv_2')->table('pengaturan_pengguna')
+                ->where('pengaturan_pengguna.pengguna_id','=',$pengguna_id)
+                ->where('pengaturan_pengguna.soft_delete','=',0)
+                ->get()
+            ],
+            200
+        );
+    }
+
+    static function getPengaturanPengguna(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $limit = $request->limit ? $request->limit : 20;
+        $start = $request->start ? $request->start : 0;
+
+        $fetch = DB::connection('sqlsrv_2')->table('pengaturan_pengguna')
+        ->where('pengaturan_pengguna.pengguna_id','=',$pengguna_id)
+        ->where('pengaturan_pengguna.soft_delete','=',0)
+        ;
+
+        return response(
+            [
+                'total' => $fetch->count(),
+                'rows' => $fetch->skip($start)->take($limit)->get()
+            ],
+            200
+        );
     }
 
     static function daftarPengguna(Request $request){
@@ -133,6 +197,22 @@ class PenggunaController extends Controller
         $username = $request->input('username') ? $request->input('username') : null;
         $data = $request->input('data') ? $request->input('data') : null;
 
+        // if(array_key_exists('password_lama', $data)){
+        //    if() 
+        // }
+        
+        if(array_key_exists('password_lama', $data)){
+            $fetch_cek = DB::connection('sqlsrv_2')->table('pengguna')->where('pengguna_id','=',$pengguna_id)->first();
+
+            if(md5($data['password_lama']) !== $fetch_cek->password){
+                return array("status" => "gagal", 'pesan' => 'password_tidak_sama');
+                die;
+            }
+        }
+
+
+        unset($data['password_lama']);
+
         if(array_key_exists('password', $data)){
             $data['password'] = md5($data['password']);
             unset($data['password_ulang']);
@@ -234,14 +314,58 @@ class PenggunaController extends Controller
             ->table(DB::raw('pengguna'))
             ->leftJoin('ref.peran as peran','peran.peran_id','=','pengguna.peran_id')
             ->leftJoin('ref.mst_wilayah as wilayah', 'wilayah.kode_wilayah','=','pengguna.kode_wilayah')
+            // ->leftJoin(DB::raw("(select * from pengikut_pengguna where pengguna_id_pengikut = '".$pengguna_id_pengikut."' and soft_delete = 0) as pengikuts"), 'pengikuts.pengguna_id','=','pengguna.pengguna_id')
+            // ->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+            ->where(function($query) use ($keyword){
+                $query->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+                      ->orWhere('pengguna.username', 'ilike', DB::raw("'%".$keyword."%'"));
+            })
+            ->where('pengguna.soft_delete', '=', 0)
+            ->select(
+                'pengguna.*',
+                'peran.nama as peran',
+                'wilayah.nama as wilayah'
+            )
+            ->get();
+        }
+
+        if($keyword && $pengguna_id_pengikut){
+            $user = DB::connection('sqlsrv_2')
+            ->table(DB::raw('pengguna'))
+            ->leftJoin('ref.peran as peran','peran.peran_id','=','pengguna.peran_id')
+            ->leftJoin('ref.mst_wilayah as wilayah', 'wilayah.kode_wilayah','=','pengguna.kode_wilayah')
             ->leftJoin(DB::raw("(select * from pengikut_pengguna where pengguna_id_pengikut = '".$pengguna_id_pengikut."' and soft_delete = 0) as pengikuts"), 'pengikuts.pengguna_id','=','pengguna.pengguna_id')
-            ->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+            // ->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+            ->where(function($query) use ($keyword){
+                $query->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+                      ->orWhere('pengguna.username', 'ilike', DB::raw("'%".$keyword."%'"));
+            })
             ->where('pengguna.soft_delete', '=', 0)
             ->select(
                 'pengguna.*',
                 'peran.nama as peran',
                 'wilayah.nama as wilayah',
                 'pengikuts.pengguna_id as validasi_pengikut'
+            )
+            ->get();
+        }
+
+        if($keyword && (int)$request->sekolah_pengguna == 1){
+            $user = DB::connection('sqlsrv_2')
+            ->table(DB::raw('pengguna'))
+            ->leftJoin('ref.peran as peran','peran.peran_id','=','pengguna.peran_id')
+            ->leftJoin('ref.mst_wilayah as wilayah', 'wilayah.kode_wilayah','=','pengguna.kode_wilayah')
+            ->leftJoin(DB::raw("(select * from sekolah_pengguna where sekolah_id = '".$request->sekolah_id."' and soft_delete = 0) as sekolah_pengguna"), 'sekolah_pengguna.pengguna_id','=','pengguna.pengguna_id')
+            ->where(function($query) use ($keyword){
+                $query->where('pengguna.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+                      ->orWhere('pengguna.username', 'ilike', DB::raw("'%".$keyword."%'"));
+            })
+            ->where('pengguna.soft_delete', '=', 0)
+            ->select(
+                'pengguna.*',
+                'peran.nama as peran',
+                'wilayah.nama as wilayah',
+                'sekolah_pengguna.pengguna_id as cek_pilih'
             )
             ->get();
         }

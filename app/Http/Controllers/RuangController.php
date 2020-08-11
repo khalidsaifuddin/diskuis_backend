@@ -28,7 +28,7 @@ class RuangController extends Controller
     }
 
     static public function generateRandomString($length = 10) {
-        $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $characters = '123456789abcdefghijkmnopqrstuvwxyzABCDEFGHIJKLMNPQRSTUVWXYZ';
         $charactersLength = strlen($characters);
         $randomString = '';
         for ($i = 0; $i < $length; $i++) {
@@ -145,14 +145,18 @@ class RuangController extends Controller
             ->where('pengguna_id','=', $pengguna_id)
             ->update([
                 'last_update' => DB::raw('now()'),
-                'soft_delete' => $soft_delete   
+                'soft_delete' => $soft_delete,
+                'no_absen' => ($request->input('no_absen') ? $request->input('no_absen') : null),
+                'jabatan_ruang_id' => ($request->input('jabatan_ruang_id') ? $request->input('jabatan_ruang_id') : $fetch_cek[0]->jabatan_ruang_id)
             ]);
 
         }else{
             //belum ada
             $exe = DB::connection('sqlsrv_2')->table('pengguna_ruang')->insert([
                 'ruang_id' => $ruang_id,
-                'pengguna_id' => $pengguna_id
+                'pengguna_id' => $pengguna_id,
+                'no_absen' => ($request->input('no_absen') ? $request->input('no_absen') : null),
+                'jabatan_ruang_id' => ($request->input('jabatan_ruang_id') ? $request->input('jabatan_ruang_id') : '4')
             ]);
         }
 
@@ -165,14 +169,21 @@ class RuangController extends Controller
             //simpan linimasa
             try {
                 //code...
-                $linimasa_id = self::generateUUID();
-                $linimasa = LinimasaController::simpanLinimasa($linimasa_id, $pengguna_id, 1, '','',$ruang_id,null);
-    
-                if($linimasa){
-                    $return['sukses_linimasa'] = true;
-                }else{
+                if(sizeof($fetch_cek) > 0){
+                    //nggak disimpan
                     $return['sukses_linimasa'] = false;
+                }else{
+                    //disimpan
+                    $linimasa_id = self::generateUUID();
+                    $linimasa = LinimasaController::simpanLinimasa($linimasa_id, $pengguna_id, 1, '','',$ruang_id,null);
+        
+                    if($linimasa){
+                        $return['sukses_linimasa'] = true;
+                    }else{
+                        $return['sukses_linimasa'] = false;
+                    }
                 }
+
             } catch (\Throwable $th) {
                 $return['sukses_linimasa'] = false;
             }
@@ -247,37 +258,68 @@ class RuangController extends Controller
         $jenis_ruang_id = $request->input('jenis_ruang_id');
         $gambar_ruang = $request->input('gambar_ruang') ? $request->input('gambar_ruang') : rand(1,8).".jpg";
         $kode_ruang = self::generateRandomString(10);
-        $ruang_id = self::generateUUID();
+        $ruang_id = $request->input('ruang_id') ? $request->input('ruang_id') : self::generateUUID();
         
         $return = array();
 
-        $insert = DB::connection('sqlsrv_2')->table('ruang')->insert([
-            'ruang_id' => $ruang_id,
-            'nama' => $nama,
-            'deskripsi' => $deskripsi,
-            'jenis_ruang_id' => $jenis_ruang_id,
-            'gambar_ruang' => $gambar_ruang,
-            'pengguna_id' => $pengguna_id,
-            'kode_ruang' => $kode_ruang
-        ]);
+        $fetch_cek = DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$ruang_id)->get();
 
-        if($insert){
-
-            $insert = DB::connection('sqlsrv_2')->table('pengguna_ruang')->insert([
+        if(sizeof($fetch_cek) > 0) {
+            //sudah ada
+            $insert = DB::connection('sqlsrv_2')->table('ruang')
+            ->where('ruang_id','=',$ruang_id)
+            ->update([
+                'nama' => $nama,
+                'deskripsi' => $deskripsi,
+                'jenis_ruang_id' => $jenis_ruang_id,
+                'gambar_ruang' => $gambar_ruang,
                 'pengguna_id' => $pengguna_id,
-                'ruang_id' => $ruang_id,
-                'create_date' => DB::raw('now()::timestamp(0)'),
-                'last_update' => DB::raw('now()::timestamp(0)'),
                 'soft_delete' => 0,
-                'room_master' => 1
+                'last_update' => DB::raw('now()::timestamp(0)')
             ]);
 
-            $return['sukses'] = true;
-            $return['ruang_id'] = $ruang_id;
-            $return['rows'] = DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$ruang_id)->first();
+            if($insert){
+    
+                $return['sukses'] = true;
+                $return['label'] = 'UPDATE';
+                $return['ruang_id'] = $ruang_id;
+                $return['rows'] = DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$ruang_id)->first();
+            }else{
+                $return['sukses'] = false;
+                $return['rows'] = [];
+            }
+
         }else{
-            $return['sukses'] = false;
-            $return['rows'] = [];
+            //belum ada
+            $insert = DB::connection('sqlsrv_2')->table('ruang')->insert([
+                'ruang_id' => $ruang_id,
+                'nama' => $nama,
+                'deskripsi' => $deskripsi,
+                'jenis_ruang_id' => $jenis_ruang_id,
+                'gambar_ruang' => $gambar_ruang,
+                'pengguna_id' => $pengguna_id,
+                'kode_ruang' => $kode_ruang
+            ]);
+    
+            if($insert){
+    
+                $insert = DB::connection('sqlsrv_2')->table('pengguna_ruang')->insert([
+                    'pengguna_id' => $pengguna_id,
+                    'ruang_id' => $ruang_id,
+                    'create_date' => DB::raw('now()::timestamp(0)'),
+                    'last_update' => DB::raw('now()::timestamp(0)'),
+                    'soft_delete' => 0,
+                    'room_master' => 1
+                ]);
+    
+                $return['sukses'] = true;
+                $return['label'] = 'INSERT';
+                $return['ruang_id'] = $ruang_id;
+                $return['rows'] = DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$ruang_id)->first();
+            }else{
+                $return['sukses'] = false;
+                $return['rows'] = [];
+            }
         }
 
         return $return;
@@ -376,6 +418,8 @@ class RuangController extends Controller
         $ruang_id = $request->input('ruang_id') ? $request->input('ruang_id') : null;
         $kode_ruang = $request->input('kode_ruang') ? $request->input('kode_ruang') : null;
         $jenis_ruang_id = $request->input('jenis_ruang_id') ? $request->input('jenis_ruang_id') : null;
+        $start = $request->input('start') ? $request->input('start') : 0;
+        $limit = $request->input('limit') ? $request->input('limit') : 20;
         $return = array();
 
         $fetch = DB::connection('sqlsrv_2')->table('ruang')
@@ -385,7 +429,8 @@ class RuangController extends Controller
             'ruang.*',
             'pengguna.nama as pengguna'
         )
-        ->take(20)
+        ->skip($start)
+        ->take($limit)
         ->orderBy('create_date','DESC');
 
         if($ruang_id){
@@ -414,7 +459,7 @@ class RuangController extends Controller
 
             for ($iFetch=0; $iFetch < sizeof($fetch); $iFetch++) { 
                 //loop for records
-                $request->merge(['pengguna_id'=>null, 'dengan_rows'=>'Y', 'ruang_id' => $fetch[$iFetch]->ruang_id]);
+                $request->merge(['pengguna_id'=>null, 'limit' => 1000,'dengan_rows'=>'Y', 'ruang_id' => $fetch[$iFetch]->ruang_id]);
                 $fetch[$iFetch]->ruang = self::getPenggunaRuang($request);
 
                 $request->merge(['pengguna_id'=>null, 'ruang_id' => $fetch[$iFetch]->ruang_id]);
@@ -464,21 +509,26 @@ class RuangController extends Controller
         $ruang_id = $request->input('ruang_id') ? $request->input('ruang_id') : null;
         $pengguna_id = $request->input('pengguna_id') ? $request->input('pengguna_id') : null;
         $dengan_rows = $request->input('dengan_rows') ? $request->input('dengan_rows') : 'N';
+        $start = $request->input('start') ? $request->input('start') : 0;
+        $limit = $request->input('limit') ? $request->input('limit') : 20;
         $return = array();
 
         $fetch = DB::connection('sqlsrv_2')->table('pengguna_ruang')
         ->join('pengguna','pengguna.pengguna_id','=','pengguna_ruang.pengguna_id')
         ->join('ruang','ruang.ruang_id','=','pengguna_ruang.ruang_id')
+        ->leftJoin('ref.jabatan_ruang as jabatan_ruang','jabatan_ruang.jabatan_ruang_id','=','pengguna_ruang.jabatan_ruang_id')
         ->where('pengguna_ruang.soft_delete','=',0)
         ->where('ruang.soft_delete','=',0)
         ->select(
             'pengguna_ruang.*',
             'pengguna.nama as pengguna',
             'ruang.nama as ruang',
-            'pengguna.gambar as gambar'
+            'pengguna.gambar as gambar',
+            'jabatan_ruang.nama as jabatan_ruang'
         )
         // ->take(20)
         ->orderBy('room_master','DESC')
+        ->orderBy('jabatan_ruang_id','ASC')
         ->orderBy('create_date','DESC')
         ;
 
@@ -493,7 +543,7 @@ class RuangController extends Controller
         // return $fetch->toSql();die;
 
         if($dengan_rows == 'Y'){
-            $fetch->take(20);
+            $fetch->skip($start)->take($limit);
             $fetch = $fetch->get();
             
             // for ($iFetch=0; $iFetch < sizeof($fetch); $iFetch++) { 

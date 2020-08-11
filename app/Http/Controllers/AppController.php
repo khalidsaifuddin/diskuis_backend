@@ -13,6 +13,33 @@ class AppController extends Controller
     	# code...
 	}
 
+	static function getRataKuis(Request $request){
+		$sql = "SELECT
+					* 
+				FROM
+					(
+					SELECT
+						pengguna_id,
+						AVG ( skor ) AS rata,
+						SUM ( 1 ) AS total,
+						SUM ( CASE WHEN status_mengerjakan_id = 1 THEN 1 ELSE 0 END ) AS belum_tuntas,
+						SUM ( CASE WHEN status_mengerjakan_id = 2 THEN 1 ELSE 0 END ) AS sudah_tuntas
+					FROM
+						pengguna_kuis 
+					WHERE
+						soft_delete = 0 
+					GROUP BY
+						pengguna_id 
+					) rata_kuis 
+				WHERE
+					rata_kuis.pengguna_id = '".$request->pengguna_id."'";
+		
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+		return $fetch;
+		
+	}
+
 	static function getStatEmpu(Request $request){
 		$sql = "SELECT * FROM (
 				SELECT

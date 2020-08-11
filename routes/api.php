@@ -71,6 +71,8 @@ Route::prefix('Kuis')->group(function () {
 	Route::post('simpanPertanyaanKuis', 'KuisController@simpanPertanyaanKuis');
 	Route::post('getStatKuis', 'KuisController@getStatKuis');
 	Route::post('uploadAudio', 'KuisController@uploadAudio');
+	Route::get('getLaporanSesiKuis', 'KuisController@getLaporanSesiKuis');
+	Route::post('getCountKuisUmum', 'KuisController@getCountKuisUmum');
 	// Route::get('getLaporanHasilKuis_excel', 'KuisController@getLaporanHasilKuis_excel');
 });
 
@@ -88,6 +90,20 @@ Route::prefix('Ruang')->group(function () {
 
 Route::prefix('Sekolah')->group(function () {
 	Route::post('simpanSekolah', 'SekolahController@simpanSekolah');
+	Route::post('simpanSekolahPengguna', 'SekolahController@simpanSekolahPengguna');
+	Route::post('getSekolah', 'SekolahController@getSekolah');
+	Route::post('getSekolahPengguna', 'SekolahController@getSekolahPengguna');
+	Route::post('aktifkanSekolah', 'SekolahController@aktifkanSekolah');
+	Route::post('getUndanganSekolah', 'SekolahController@getUndanganSekolah');
+	Route::post('simpanUndanganSekolah', 'SekolahController@simpanUndanganSekolah');
+	Route::post('getGuru', 'SekolahController@getGuru');
+	Route::post('simpanGuru', 'SekolahController@simpanGuru');
+	Route::post('getKehadiranGuru', 'SekolahController@getKehadiranGuru');
+	Route::post('simpanKehadiranGuru', 'SekolahController@simpanKehadiranGuru');
+	Route::post('kehadiranHarianGuru', 'SekolahController@kehadiranHarianGuru');
+	Route::post('kehadiranRekapGuru', 'SekolahController@kehadiranRekapGuru');
+	Route::post('getPengaturanSekolah', 'SekolahController@getPengaturanSekolah');
+	Route::post('simpanPengaturanSekolah', 'SekolahController@simpanPengaturanSekolah');
 });
 
 
@@ -117,6 +133,9 @@ Route::prefix('app')->group(function () {
 	Route::post('getMapel', 'AppController@getMapel');
 	Route::post('getStatistik', 'AppController@getStatistik');
 	Route::post('getStatEmpu', 'AppController@getStatEmpu');
+	Route::post('getRataKuis', 'AppController@getRataKuis');
+	Route::post('getPengaturanPengguna', 'PenggunaController@getPengaturanPengguna');
+	Route::post('simpanPengaturanPengguna', 'PenggunaController@simpanPengaturanPengguna');
 });
 
 Route::middleware('token')->group(function(){

@@ -1,6 +1,7 @@
 <?php
 $dataObj = $return;
-$nama_ruang = $nama_ruang;
+$judul_kuis = $judul_kuis;
+$keterangan = $keterangan;
 
 $arrAlfabet = array('','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z');
 
@@ -61,8 +62,8 @@ $style_header = array(
 
 //set Width Colum
 $object->getActiveSheet()->getColumnDimension('A')->setWidth(7);
-$object->getActiveSheet()->getColumnDimension('B')->setWidth(20);
-$object->getActiveSheet()->getColumnDimension('C')->setWidth(10);
+$object->getActiveSheet()->getColumnDimension('B')->setWidth(40);
+$object->getActiveSheet()->getColumnDimension('C')->setWidth(40);
 $object->getActiveSheet()->getColumnDimension('D')->setWidth(10);
 $object->getActiveSheet()->getColumnDimension('E')->setWidth(10);
 $object->getActiveSheet()->getColumnDimension('F')->setWidth(10);
@@ -84,6 +85,9 @@ $object->getActiveSheet()->getStyle('A'.$headerTable.':M'.$headerTable)->getFont
 //set margeCell
 $object->getActiveSheet()->mergeCells('A3:A4');
 $object->getActiveSheet()->mergeCells('B3:B4');
+$object->getActiveSheet()->mergeCells('C3:C4');
+$object->getActiveSheet()->mergeCells('D3:D4');
+$object->getActiveSheet()->mergeCells('E3:E4');
 // $object->getActiveSheet()->mergeCells('B3:M3');
 // $object->getActiveSheet()->mergeCells('B4:M4');
 
@@ -110,9 +114,12 @@ $ex = $object->setActiveSheetIndex(0);
 
 $object->setActiveSheetIndex(0)
 ->setCellValue('A1', 'Laporan Hasil Kuis')
-->setCellValue('A2', $nama_ruang)
+->setCellValue('A2', $judul_kuis . " - " . $keterangan)
 ->setCellValue('A'.$headerTable, 'No')
 ->setCellValue('B'.$headerTable, 'Nama Peserta')
+->setCellValue('C'.$headerTable, 'Username')
+->setCellValue('D'.$headerTable, 'Skor')
+->setCellValue('E'.$headerTable, 'Durasi')
 ;
 
 $ex->getStyle('A1')->getFont()->setBold(true);
@@ -124,21 +131,21 @@ $ex->mergeCells('A2:F2');
 // $object->getActiveSheet()->getStyle('A'.$headerTable.':M'.$headerTable)->applyFromArray($style_row);
 
 // set Judul
-if(sizeof($dataObj) > 0){
-  // setCellValueByColumnAndRow
-  for ($iJudul=0; $iJudul < sizeof($dataObj[0]->kuis); $iJudul++) { 
-    // $dataObj[0]->kuis[$iJudul]->judul
-    $ex->setCellValueByColumnAndRow(($iJudul+2),4, $dataObj[0]->kuis[$iJudul]['judul']);
-  }
+// if(sizeof($dataObj) > 0){
+//   // setCellValueByColumnAndRow
+//   for ($iJudul=0; $iJudul < sizeof($dataObj[0]->kuis); $iJudul++) { 
+//     // $dataObj[0]->kuis[$iJudul]->judul
+//     $ex->setCellValueByColumnAndRow(($iJudul+2),4, $dataObj[0]->kuis[$iJudul]['judul']);
+//   }
   
-  $ex->getStyle($arrAlfabet[3].'4'.':'.$arrAlfabet[($iJudul+2)].'4')->getFont()->setBold(true);
+//   $ex->getStyle($arrAlfabet[3].'4'.':'.$arrAlfabet[($iJudul+2)].'4')->getFont()->setBold(true);
 
-  $ex->getStyle($arrAlfabet[3].'4'.':'.$arrAlfabet[($iJudul+2)].'4')->applyFromArray($style_row);
-  $ex->getStyle($arrAlfabet[1].'3'.':'.$arrAlfabet[($iJudul+2)].'4')->applyFromArray($style_row);
+//   $ex->getStyle($arrAlfabet[3].'4'.':'.$arrAlfabet[($iJudul+2)].'4')->applyFromArray($style_row);
+//   $ex->getStyle($arrAlfabet[1].'3'.':'.$arrAlfabet[($iJudul+2)].'4')->applyFromArray($style_row);
 
-  $ex->setCellValue("C3", 'Judul Kuis');
-  $object->getActiveSheet()->mergeCells('C3:'.$arrAlfabet[($iJudul+2)].'3');
-}
+//   $ex->setCellValue("C3", 'Judul Kuis');
+//   $object->getActiveSheet()->mergeCells('C3:'.$arrAlfabet[($iJudul+2)].'3');
+// }
 
 // //Table
 $num = $headerTable + 2;
@@ -149,11 +156,15 @@ foreach ($dataObj as $value) {
 //   $no_telepon_orangtua = 'no_telepon_'.$ortu;
 
   $ex->setCellValue("A".$num, $no);
-  $ex->setCellValue("B".$num, $value->nama);
+  $ex->setCellValue("B".$num, $value->nama_pengguna);
+  $ex->setCellValue("C".$num, $value->username_pengguna);
+  $ex->setCellValue("D".$num, $value->skor);
+  // $ex->setCellValue("E".$num, $value->durasi);
+  $ex->setCellValue("E".$num, (floor((int)$value->durasi/60)).":".(floor((int)$value->durasi%60)));
 
-  for ($iKuis=0; $iKuis < sizeof($value->kuis); $iKuis++) { 
-    $ex->setCellValueByColumnAndRow(($iKuis+2),$num, $value->kuis[$iKuis]['skor']);
-  }
+  // for ($iKuis=0; $iKuis < sizeof($value->kuis); $iKuis++) { 
+  //   $ex->setCellValueByColumnAndRow(($iKuis+2),$num, $value->kuis[$iKuis]['skor']);
+  // }
 //   $ex->setCellValue("C".$num, $value->nik);
 //   $ex->setCellValue("D".$num, $value->urutan);
 //   $ex->setCellValue("E".$num, $value->jenis_kelamin);
@@ -187,7 +198,7 @@ $object->setActiveSheetIndex(0);
 
 // Redirect output to a client’s web browser (Excel2007)
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-header('Content-Disposition: attachment;filename="laporan_hasil_kuis-'.$nama_ruang.'-'.date('Y-m-d H:i:s').'.xls"');
+header('Content-Disposition: attachment;filename="laporan_hasil_kuis-'.$judul_kuis.'-'.date('Y-m-d H:i:s').'.xls"');
 $data = PHPExcel_IOFactory::createWriter($object, 'Excel5');
 // $data = PHPExcel_IOFactory::createWriter($object, 'Excel2007');
 $data->setIncludeCharts(true);

@@ -27,6 +27,53 @@ class KuisController extends Controller
         return $return;
     }
 
+    static function getCountKuisUmum(Request $request){
+        $fetch = DB::connection('sqlsrv_2')->select(DB::raw("SELECT
+            jenjang_id,
+            SUM ( 1 ) AS total 
+        FROM
+            kuis 
+        WHERE
+            soft_delete = 0 
+            AND status_privasi = 1 
+            AND jenjang_id = 98
+            AND publikasi = 1
+            AND pengguna_id is not null
+        GROUP BY
+            jenjang_id"));
+
+        return $fetch;
+    }
+
+    static function getLaporanSesiKuis(Request $request){
+        $sesi_kuis_id = $request->sesi_kuis_id;
+
+        $fetch = DB::connection('sqlsrv_2')->table('pengguna_kuis')
+        ->join('pengguna','pengguna.pengguna_id','=','pengguna_kuis.pengguna_id')
+        ->where('pengguna_kuis.soft_delete','=',0)
+        ->where('pengguna.soft_delete','=',0)
+        ->where('pengguna_kuis.sesi_kuis_id','=',$sesi_kuis_id)
+        ->select(
+            'pengguna_kuis.*',
+            'pengguna.nama as nama_pengguna',
+            'pengguna.username as username_pengguna'
+        )
+        ->get();
+
+        $fetch2 = DB::connection('sqlsrv_2')->table('sesi_kuis')
+        ->join('kuis','kuis.kuis_id','=','sesi_kuis.kuis_id')
+        ->where('sesi_kuis.sesi_kuis_id','=',$sesi_kuis_id)
+        ->select(
+            'kuis.*',
+            'sesi_kuis.keterangan as keterangan'
+        )
+        ->first();
+
+        // return $fetch2;
+
+        return view('excel/LaporanSesiKuisExcel', ['return' => $fetch, 'judul_kuis' => $fetch2->judul, 'keterangan' => $fetch2->keterangan]);
+    }
+
     public function uploadAudio(Request $request)
     {
         $data = $request->all();
@@ -297,6 +344,7 @@ class KuisController extends Controller
             //         order by sesi_kuis.create_date asc";
             $sql_kuis = "SELECT
                             kuis.judul, 
+                            sesi_kuis.keterangan,
                             COALESCE(pengguna_kuis.skor,0) as skor
                         FROM
                             sesi_kuis
@@ -316,6 +364,7 @@ class KuisController extends Controller
                 $arrTmp = array();
 
                 $arrTmp['judul'] = $fetch_kuis[$iFetchKuis]->{'judul'};
+                $arrTmp['keterangan'] = $fetch_kuis[$iFetchKuis]->{'keterangan'};
                 $arrTmp['skor'] = round($fetch_kuis[$iFetchKuis]->{'skor'},2);
 
                 // $fetch[$iFetch]->{$fetch_kuis[$iFetchKuis]->{'judul'}} = $fetch_kuis[$iFetchKuis]->{'skor'};
@@ -327,6 +376,8 @@ class KuisController extends Controller
         }
 
         if($request->output == 'xlsx'){
+            // return $request->ruang_id;die;
+            // return DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$request->ruang_id)->get();die;
             $nama_ruang = DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$request->ruang_id)->first()->nama;
             return view('excel/LaporanHasilKuisExcel', ['return' => $fetch, 'nama_ruang' => $nama_ruang]);
         }else{
@@ -873,18 +924,23 @@ class KuisController extends Controller
                         $label = 'UPDATE';
                     }else{
                         //belum ada
-                        $exe_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
-                        ->insert([
-                            'pilihan_pertanyaan_kuis_id' => $obj['pilihan_pertanyaan_kuis_id'],
-                            'jawaban_benar' => $obj['jawaban_benar'],
-                            'teks' => $obj['teks'],
-                            'soft_delete' => $obj['soft_delete'],
-                            'pertanyaan_kuis_id' => $pertanyaan_kuis_id,
-                            'pengguna_id' => $pengguna_id,
-                            'create_date' => DB::raw('now()::timestamp(0)'),
-                            'last_update' => DB::raw('now()::timestamp(0)')
-                        ]);
-                        $label = 'INSERT';
+                        if(array_key_exists('teks', $obj)){
+
+                            $exe_pilihan = DB::connection('sqlsrv_2')->table('pilihan_pertanyaan_kuis')
+                            ->insert([
+                                'pilihan_pertanyaan_kuis_id' => $obj['pilihan_pertanyaan_kuis_id'],
+                                'jawaban_benar' => $obj['jawaban_benar'],
+                                'teks' => $obj['teks'],
+                                'soft_delete' => $obj['soft_delete'],
+                                'pertanyaan_kuis_id' => $pertanyaan_kuis_id,
+                                'pengguna_id' => $pengguna_id,
+                                'create_date' => DB::raw('now()::timestamp(0)'),
+                                'last_update' => DB::raw('now()::timestamp(0)')
+                            ]);
+                            $label = 'INSERT';
+                            
+                        }
+
                     }
     
                     if($exe_pilihan){
@@ -1027,6 +1083,7 @@ class KuisController extends Controller
         $status_privasi = $request->input('status_privasi') ? $request->input('status_privasi') : null;
         $mata_pelajaran_id = $request->input('mata_pelajaran_id') ? $request->input('mata_pelajaran_id') : null;
         $jenjang_id = $request->input('jenjang_id') ? $request->input('jenjang_id') : null;
+        $publikasi = $request->input('publikasi') ? $request->input('publikasi') : null;
         $tingkat_pendidikan_id = $request->input('tingkat_pendidikan_id') ? $request->input('tingkat_pendidikan_id') : null;
         $start = $request->input('start') ? $request->input('start') : 0;
         $limit = $request->input('limit') ? $request->input('limit') : 20;
@@ -1111,12 +1168,20 @@ class KuisController extends Controller
             $fetch->where('kuis.jenjang_id','=',$jenjang_id);
         }
         
+        if($publikasi && (int)$publikasi != 99){
+            $fetch->where('kuis.publikasi','=',$publikasi);
+        }
+        
         if($tingkat_pendidikan_id && (int)$tingkat_pendidikan_id != 99){
             $fetch->where('kuis.tingkat_pendidikan_id','=',$tingkat_pendidikan_id);
         }
         
         if($keyword){
-            $fetch->where('kuis.judul','ilike',DB::raw("'%".$keyword."%'"));
+            // $fetch->where('kuis.judul','ilike',DB::raw("'%".$keyword."%'"));
+            $fetch->where(function($query) use ($keyword){
+                $query->where('kuis.judul','ilike',DB::raw("'%".$keyword."%'"))
+                      ->orWhere('kuis.keterangan','ilike',DB::raw("'%".$keyword."%'"));
+            });
             // $fetch->whereOr('kuis.judul','ilike',"'%".$keyword."%'");
         }
 

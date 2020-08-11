@@ -27,6 +27,7 @@ class Cors
             "http://test.one",
             "http://app.diskuis.id",
             "https://app.diskuis.id",
+            "file://",
             // "http://gamemaster.diskuis.id/",
             null
         ];
