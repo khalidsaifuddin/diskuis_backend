@@ -439,9 +439,32 @@ class SekolahController extends Controller
         $sekolah_id = $request->sekolah_id;
         $pengguna_id = $request->pengguna_id;
 
+        // $fetch_sekolah_id = DB::connection('sqlsrv_2')
+        // ->table('sekolah')
+        // ->join('sekolah_pengguna','sekolah_pengguna.sekolah_id','=','sekolah.sekolah_id')
+        // ->where('sekolah.soft_delete','=',0)
+        // ->where('sekolah_pengguna.soft_delete','=',0)
+        // ->where('sekolah_pengguna.pengguna_id','=',$pengguna_id)
+        // ->get();
+
+        // $arr_sekolah_id = array();
+
+        // for ($i=0; $i < sizeof($fetch_sekolah_id); $i++) { 
+        //     array_push($arr_sekolah_id, $fetch_sekolah_id[$i]->sekolah_id);
+        // }
+
+        // return $arr_sekolah_id;die;
+        // $exe_yang_lain = DB::connection('sqlsrv_2')
+        // ->table('sekolah')
+        // ->whereIn('sekolah_id', $arr_sekolah_id)
+        // ->get();
+
+        // return $exe_yang_lain;die;
+
         $exe_yang_lain = DB::connection('sqlsrv_2')
-        ->table('sekolah')
-        ->where('pengguna_id','=',$pengguna_id)
+        ->table('sekolah_pengguna')
+        ->where('sekolah_pengguna.pengguna_id','=',$pengguna_id)
+        // ->whereIn('sekolah_id', $arr_sekolah_id)
         ->update([
             'aktif' => '0',
             'last_update' => DB::raw('now()::timestamp(0)')
@@ -450,8 +473,9 @@ class SekolahController extends Controller
         if($exe_yang_lain){
             //setAktif
             $exe_aktif = DB::connection('sqlsrv_2')
-            ->table('sekolah')
-            ->where('sekolah_id','=',$sekolah_id)
+            ->table('sekolah_pengguna')
+            ->where('sekolah_pengguna.pengguna_id','=',$pengguna_id)
+            ->where('sekolah_pengguna.sekolah_id','=',$sekolah_id)
             ->update([
                 'aktif' => '1',
                 'last_update' => DB::raw('now()::timestamp(0)')
@@ -470,9 +494,34 @@ class SekolahController extends Controller
 
     }
 
+    static function simpanAdministrator(Request $request){
+        $sekolah_id = $request->sekolah_id;
+        $pengguna_id = $request->pengguna_id;
+
+        $exe = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+        ->where('pengguna_id','=', $pengguna_id)
+        ->where('sekolah_id','=', $sekolah_id)
+        ->update([
+            'administrator' => 1,
+            'last_update' => DB::raw('now()::timestamp(0)')
+        ]);
+
+        return response(
+            [
+                'sukses' => ($exe ? true : false),
+                'rows' => DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                            ->where('pengguna_id','=', $pengguna_id)
+                            ->where('sekolah_id','=', $sekolah_id)
+                            ->get()
+            ],
+            200
+        );
+    }
+
     static function getSekolah(Request $request){
         $sekolah_id = $request->sekolah_id;
         $pengguna_id = $request->pengguna_id;
+        $administrator = $request->administrator;
         $aktif = $request->aktif;
         $start = $request->start ? $request->start : 0;
         $limit = $request->limit ? $request->limit : 20;
@@ -489,20 +538,29 @@ class SekolahController extends Controller
         ->orderBy('sekolah.aktif','DESC')
         ;
 
-        if($pengguna_id){
-            $fetch->where('sekolah_pengguna.pengguna_id','=',$pengguna_id)->where('sekolah_pengguna.pendiri','=',1)
+        if($pengguna_id && !$administrator){
+            $fetch->where('sekolah_pengguna.pengguna_id','=',DB::raw("'".$pengguna_id."'"))
+            // ->where('sekolah_pengguna.pendiri','=',1)
+            ;
+        }
+        
+        if($administrator){
+            $fetch->where('sekolah_pengguna.administrator','=',DB::raw(1))
+            ->where('sekolah_pengguna.pengguna_id','=',DB::raw("'".$pengguna_id."'"))
             ;
         }
         
         if($sekolah_id){
-            $fetch->where('sekolah.sekolah_id','=',$sekolah_id)
+            $fetch->where('sekolah.sekolah_id','=',DB::raw("'".$sekolah_id."'"))
             ;
         }
         
         if($aktif){
-            $fetch->where('sekolah.aktif','=',$aktif)
+            $fetch->where('sekolah_pengguna.aktif','=',DB::raw("'".$aktif."'"))
             ;
         }
+
+        // return $fetch->toSql();die;
 
         return response(
             [
@@ -576,6 +634,7 @@ class SekolahController extends Controller
                     'sekolah_id' => $sekolah_id,
                     'pengguna_id' => $pengguna_id,
                     'pendiri' => 1,
+                    'administrator' => 1,
                     'jabatan_sekolah_id' => 1,
                     'valid' => 1,
                     'create_date' => DB::raw('now()::timestamp(0)'),
@@ -598,6 +657,7 @@ class SekolahController extends Controller
     static function getSekolahPengguna(Request $request){
         $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $jabatan_sekolah_id = $request->jabatan_sekolah_id ? $request->jabatan_sekolah_id : null;
         $start = $request->start ? $request->start : 0;
         $limit = $request->limit ? $request->limit : 20;
 
@@ -628,14 +688,55 @@ class SekolahController extends Controller
         if($pengguna_id){
             $fetch->where('sekolah_pengguna.pengguna_id','=',$pengguna_id);
         }
+        
+        if($jabatan_sekolah_id){
+            $fetch->where('sekolah_pengguna.jabatan_sekolah_id','=',$jabatan_sekolah_id);
+        }
 
         return response(
             [
                 'total' => $fetch->count(),
-                'rows' => $fetch->skip($start)->take($limit)->get()
+                'rows' => $fetch->skip($start)->take($limit)->orderBy('sekolah_utama', 'DESC')->get()
             ],
             200
         );
+    }
+
+    static function simpanSekolahUtama(Request $request){
+        $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $sekolah_utama = $request->sekolah_utama ? $request->sekolah_utama : 0;
+
+        $exe_normalisasi = Db::connection('sqlsrv_2')->table('sekolah_pengguna')
+        // ->where('sekolah_id','=',$sekolah_id)
+        ->where('pengguna_id','=',$pengguna_id)
+        ->where('soft_delete','=','0')
+        ->update([
+            'sekolah_utama' => '0',
+            'last_update' => DB::raw('now()::timestamp(0)')
+        ]);
+
+        $exe_utama = Db::connection('sqlsrv_2')->table('sekolah_pengguna')
+        ->where('sekolah_id','=',$sekolah_id)
+        ->where('pengguna_id','=',$pengguna_id)
+        ->where('soft_delete','=','0')
+        ->update([
+            'sekolah_utama' => $sekolah_utama,
+            'last_update' => DB::raw('now()::timestamp(0)')
+        ]);
+
+        return response(
+            [
+                'sukses' => ($exe_utama ? true: false),
+                'rows' => DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                ->where('sekolah_id','=',$sekolah_id)
+                ->where('pengguna_id','=',$pengguna_id)
+                ->where('soft_delete','=','0')
+                ->get()
+            ],
+            200
+        );
+
     }
 
     static function simpanSekolahPengguna(Request $request){
@@ -702,4 +803,5 @@ class SekolahController extends Controller
             200
         );
     }
+
 }

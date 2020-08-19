@@ -73,6 +73,9 @@ Route::prefix('Kuis')->group(function () {
 	Route::post('uploadAudio', 'KuisController@uploadAudio');
 	Route::get('getLaporanSesiKuis', 'KuisController@getLaporanSesiKuis');
 	Route::post('getCountKuisUmum', 'KuisController@getCountKuisUmum');
+	Route::post('getSesiKuisPengguna', 'KuisController@getSesiKuisPengguna');
+	Route::post('getKolaborasiKuis', 'KuisController@getKolaborasiKuis');
+	Route::post('simpanKolaborasiKuis', 'KuisController@simpanKolaborasiKuis');
 	// Route::get('getLaporanHasilKuis_excel', 'KuisController@getLaporanHasilKuis_excel');
 });
 
@@ -86,6 +89,13 @@ Route::prefix('Ruang')->group(function () {
 	Route::post('getRuangDiikuti', 'RuangController@getRuangDiikuti');
 	Route::post('generateRandomString', 'RuangController@generateRandomString');
 	Route::post('hapusRuang', 'RuangController@hapusRuang');
+});
+
+Route::prefix('Siswa')->group(function () {
+	Route::post('getSiswa', 'SiswaController@getSiswa');
+	Route::post('getOrangtua', 'SiswaController@getOrangtua');
+	Route::post('simpanSiswa', 'SiswaController@simpanSiswa');
+	Route::post('simpanOrangtua', 'SiswaController@simpanOrangtua');
 });
 
 Route::prefix('Sekolah')->group(function () {
@@ -104,6 +114,8 @@ Route::prefix('Sekolah')->group(function () {
 	Route::post('kehadiranRekapGuru', 'SekolahController@kehadiranRekapGuru');
 	Route::post('getPengaturanSekolah', 'SekolahController@getPengaturanSekolah');
 	Route::post('simpanPengaturanSekolah', 'SekolahController@simpanPengaturanSekolah');
+	Route::post('simpanSekolahUtama', 'SekolahController@simpanSekolahUtama');
+	Route::post('simpanAdministrator', 'SekolahController@simpanAdministrator');
 });
 
 

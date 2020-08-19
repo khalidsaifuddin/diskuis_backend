@@ -46,6 +46,7 @@ class PenggunaController extends Controller
             ->update([
                 'tampilkan_beranda_sekolah' => $request->tampilkan_beranda_sekolah ? $request->tampilkan_beranda_sekolah : '0',
                 'hide_menu_sekolah' => $request->hide_menu_sekolah ? $request->hide_menu_sekolah : '0',
+                'custom_logo_sekolah' => $request->custom_logo_sekolah ? $request->custom_logo_sekolah : '0',
                 'last_update' => DB::raw('now()::timestamp(0)'),
             ]);
         }else{
@@ -56,6 +57,7 @@ class PenggunaController extends Controller
                 'pengguna_id' => $pengguna_id,
                 'tampilkan_beranda_sekolah' => $request->tampilkan_beranda_sekolah ? $request->tampilkan_beranda_sekolah : '0',
                 'hide_menu_sekolah' => $request->hide_menu_sekolah ? $request->hide_menu_sekolah : '0',
+                'custom_logo_sekolah' => $request->custom_logo_sekolah ? $request->custom_logo_sekolah : '0',
                 'create_date' => DB::raw('now()::timestamp(0)'),
                 'last_update' => DB::raw('now()::timestamp(0)'),
                 'soft_delete' => '0',    

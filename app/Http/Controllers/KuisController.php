@@ -1500,4 +1500,138 @@ class KuisController extends Controller
 
         // return $data['pertanyaan_kuis']['c05c2341-389f-4a3f-b7ec-7a59cb0713f4'];
     }
+
+    static function getSesiKuisPengguna(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 20;
+
+        // $sql = "SELECT
+        //     kuis.*,
+        //     sesi_kuis.*,
+        //     kuis.keterangan AS keterangan_kuis 
+        // FROM
+        //     sesi_kuis
+        //     JOIN kuis ON kuis.kuis_id = sesi_kuis.kuis_id 
+        // WHERE
+        //     sesi_kuis.pengguna_id = '3607341d-a0a4-4754-a7b4-09b057247fad' 
+        //     AND kuis.pengguna_id != '3607341d-a0a4-4754-a7b4-09b057247fad' 
+        //     AND sesi_kuis.soft_delete = 0 
+        //     AND kuis.soft_delete = 0";
+        
+        // $fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+        $fetch = DB::connection('sqlsrv_2')
+        ->table('sesi_kuis')
+        ->join('kuis','kuis.kuis_id','=','sesi_kuis.kuis_id')
+        ->join('pengguna','pengguna.pengguna_id','=','kuis.pengguna_id')
+        ->leftJoin('pengguna as sesi_pengguna','sesi_pengguna.pengguna_id','=','sesi_kuis.pengguna_id')
+        ->select(
+            'kuis.*',
+            'sesi_kuis.*',
+            'kuis.keterangan as keterangan_kuis',
+            'pengguna.nama as pembuat_kuis',
+            'sesi_pengguna.nama as pengguna'
+        )
+        ->where('sesi_kuis.pengguna_id','=', $pengguna_id)
+        ->where('kuis.pengguna_id','!=', $pengguna_id)
+        ->where('sesi_kuis.soft_delete','=', 0)
+        ->where('kuis.soft_delete','=', 0)
+        ;
+
+        // return $fetch->toSql();die;
+        return response(
+            [
+                'total' => $fetch->count(),
+                'rows' => $fetch->skip($start)->take($limit)->orderBy('sesi_kuis.create_date', 'DESC')->get()
+            ],
+            200
+        );
+    }
+
+    static function getKolaborasiKuis(Request $request){
+        $kuis_id = $request->kuis_id ? $request->kuis_id : null;
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 20;
+
+        $fetch = DB::connection('sqlsrv_2')->table('kolaborasi_kuis')
+        ->join('pengguna', 'pengguna.pengguna_id','=','kolaborasi_kuis.pengguna_id')
+        ->join('kuis', 'kuis.kuis_id','=','kolaborasi_kuis.kuis_id')
+        ->join('pengguna as kuisnya_pengguna', 'kuisnya_pengguna.pengguna_id','=','kuis.pengguna_id')
+        ->select(
+            'pengguna.*',
+            'kolaborasi_kuis.*',
+            'kuis.*',
+            'kuisnya_pengguna.nama as pembuat_kuis',
+            'kolaborasi_kuis.create_date as tanggal_kolab',
+            'kuis.pengguna_id as pengguna_id_kuis'
+        )
+        ->where('kolaborasi_kuis.soft_delete','=',0)
+        ;
+
+        if($kuis_id){
+            $fetch->where('kolaborasi_kuis.kuis_id','=',$kuis_id);
+        }
+
+        if($pengguna_id){
+            $fetch->where('kolaborasi_kuis.pengguna_id','=',$pengguna_id);
+        }
+
+        return response(
+            [
+                'total' => $fetch->count(),
+                'rows' => $fetch->skip($start)->take($limit)->orderBy('kolaborasi_kuis.create_date', 'DESC')->get()
+            ],
+            200
+        );
+    }
+
+    static function simpanKolaborasiKuis(Request $request){
+        $kuis_id = $request->kuis_id ? $request->kuis_id : null;
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $soft_delete = $request->soft_delete ? $request->soft_delete : 0;
+
+        $fetch_cek = DB::connection('sqlsrv_2')->table('kolaborasi_kuis')
+        ->where('kolaborasi_kuis.kuis_id','=',$kuis_id)
+        ->where('kolaborasi_kuis.pengguna_id','=',$pengguna_id)
+        ->where('kolaborasi_kuis.soft_delete','=',0)
+        ->get();
+        ;
+
+        if(sizeof($fetch_cek) > 0){
+            //sudah ada
+            $exe = DB::connection('sqlsrv_2')->table('kolaborasi_kuis')
+            ->where('kolaborasi_kuis.kuis_id','=',$kuis_id)
+            ->where('kolaborasi_kuis.pengguna_id','=',$pengguna_id)
+            ->where('kolaborasi_kuis.soft_delete','=',0)
+            ->update([
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => $soft_delete
+            ]);
+        }else{
+            //belum ada
+            $exe = DB::connection('sqlsrv_2')->table('kolaborasi_kuis')
+            ->insert([
+                'kolaborasi_kuis_id' => self::generateUUID(),
+                'pengguna_id' => $pengguna_id,
+                'kuis_id' => $kuis_id,
+                'create_date' => DB::raw('now()::timestamp(0)'),
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => 0
+            ]);
+        }
+
+        return response(
+            [
+                'sukses' => ($exe ? true : false),
+                'rows' => DB::connection('sqlsrv_2')->table('kolaborasi_kuis')
+                ->where('kolaborasi_kuis.kuis_id','=',$kuis_id)
+                ->where('kolaborasi_kuis.pengguna_id','=',$pengguna_id)
+                ->where('kolaborasi_kuis.soft_delete','=',0)
+                ->get()
+            ],
+            200
+        );
+    }
 }
