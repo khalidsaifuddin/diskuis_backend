@@ -13,6 +13,227 @@ class AppController extends Controller
     	# code...
 	}
 
+	static function getRekapKumulatif(Request $request){
+		// return "oke";
+		$interval = $request->interval ? $request->interval : 10;
+		$jenis = $request->jenis ? $request->jenis : 'kuis';
+
+		$str_interval = "";
+
+		for ($i=0; $i < ($interval-1); $i++) { 
+			$str_interval .= "SELECT now() - INTERVAL '".($i+1)."' DAY AS tanggal UNION ";
+		}
+
+		$sql = "
+		SELECT
+			base_tanggal.tanggal,
+			COALESCE ( (select sum(1) from {$jenis} where soft_delete = 0 and pengguna_id is not null and create_date <= cast(base_tanggal.tanggal as timestamp)), 0 ) AS total 
+		FROM
+			(
+			SELECT SUBSTRING
+				( CAST ( tanggal AS VARCHAR ( 100 )), 0, 11 ) AS tanggal 
+			FROM
+				(
+				SELECT now() AS tanggal UNION
+				{$str_interval}
+				SELECT NULL
+				) kumpulan_tanggal 
+			WHERE
+				tanggal IS NOT NULL 
+			ORDER BY
+				tanggal DESC 
+			) base_tanggal
+			LEFT JOIN (
+			SELECT
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 11 ) AS tanggal,
+				SUM ( 1 ) AS total 
+			FROM
+				{$jenis} 
+			WHERE
+				soft_delete = 0 
+				AND pengguna_id IS NOT NULL 
+			GROUP BY
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 11 ) 
+			) rekap ON rekap.tanggal = base_tanggal.tanggal 
+		ORDER BY
+			base_tanggal.tanggal ASC
+		";
+
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+		return $fetch;
+	}
+
+	static function getRekapBulananKumulatif(Request $request){
+		// return "oke";
+		$interval = $request->interval ? $request->interval : 3;
+		$jenis = $request->jenis ? $request->jenis : 'kuis';
+
+		$str_interval = "";
+
+		for ($i=0; $i < ($interval-1); $i++) { 
+			$str_interval .= "SELECT now() - INTERVAL '".($i+1)."' MONTH AS tanggal UNION ";
+		}
+
+		$sql = "
+		SELECT
+			base_tanggal.tanggal,
+			COALESCE (
+				(
+				SELECT SUM
+					( 1 ) 
+				FROM
+					{$jenis} 
+				WHERE
+					soft_delete = 0 
+					AND pengguna_id IS NOT NULL 
+				AND create_date <= CAST ( concat ( base_tanggal.tanggal, ( CASE WHEN substr( base_tanggal.tanggal, 6 ) != '02' THEN '-30' ELSE'-28' END ) ) AS TIMESTAMP )),
+				0 
+			) AS total 
+		FROM
+			(
+			SELECT SUBSTRING
+				( CAST ( tanggal AS VARCHAR ( 100 )), 0, 8 ) AS tanggal 
+			FROM
+				(
+				SELECT now() AS tanggal UNION
+				{$str_interval}
+				SELECT NULL
+				) kumpulan_tanggal 
+			WHERE
+				tanggal IS NOT NULL 
+			ORDER BY
+				tanggal DESC 
+			) base_tanggal
+			LEFT JOIN (
+			SELECT
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 8 ) AS tanggal,
+				SUM ( 1 ) AS total 
+			FROM
+				{$jenis} 
+			WHERE
+				soft_delete = 0 
+				AND pengguna_id IS NOT NULL 
+			GROUP BY
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 8 ) 
+			) rekap ON rekap.tanggal = base_tanggal.tanggal 
+		ORDER BY
+			base_tanggal.tanggal ASC
+		";
+
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+		return $fetch;
+	}
+
+	static function getRekap(Request $request){
+		// return "oke";
+		$interval = $request->interval ? $request->interval : 10;
+		$jenis = $request->jenis ? $request->jenis : 'kuis';
+
+		$str_interval = "";
+
+		for ($i=0; $i < ($interval-1); $i++) { 
+			$str_interval .= "SELECT now() - INTERVAL '".($i+1)."' DAY AS tanggal UNION ";
+		}
+
+		$sql = "
+		SELECT
+			base_tanggal.tanggal,
+			COALESCE ( rekap.total, 0 ) AS total 
+		FROM
+			(
+			SELECT SUBSTRING
+				( CAST ( tanggal AS VARCHAR ( 100 )), 0, 11 ) AS tanggal 
+			FROM
+				(
+				SELECT now() AS tanggal UNION
+				{$str_interval}
+				SELECT NULL
+				) kumpulan_tanggal 
+			WHERE
+				tanggal IS NOT NULL 
+			ORDER BY
+				tanggal DESC 
+			) base_tanggal
+			LEFT JOIN (
+			SELECT
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 11 ) AS tanggal,
+				SUM ( 1 ) AS total 
+			FROM
+				{$jenis} 
+			WHERE
+				soft_delete = 0 
+				AND pengguna_id IS NOT NULL 
+			GROUP BY
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 11 ) 
+			) rekap ON rekap.tanggal = base_tanggal.tanggal 
+		ORDER BY
+			base_tanggal.tanggal ASC
+		";
+
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+		return $fetch;
+	}
+
+	static function getRekapBulanan(Request $request){
+		// return "oke";
+		$interval = $request->interval ? $request->interval : 3;
+		$jenis = $request->jenis ? $request->jenis : 'kuis';
+
+		$str_interval = "";
+
+		for ($i=0; $i < ($interval-1); $i++) { 
+			$str_interval .= "SELECT now() - INTERVAL '".($i+1)."' MONTH AS tanggal UNION ";
+		}
+
+		$sql = "
+		SELECT
+			base_tanggal.tanggal,
+			COALESCE ( rekap.total, 0 ) AS total 
+		FROM
+			(
+			SELECT SUBSTRING
+				( CAST ( tanggal AS VARCHAR ( 100 )), 0, 8 ) AS tanggal 
+			FROM
+				(
+				SELECT now() AS tanggal UNION
+				{$str_interval}
+				SELECT NULL
+				) kumpulan_tanggal 
+			WHERE
+				tanggal IS NOT NULL 
+			ORDER BY
+				tanggal DESC 
+			) base_tanggal
+			LEFT JOIN (
+			SELECT
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 8 ) AS tanggal,
+				SUM ( 1 ) AS total 
+			FROM
+				{$jenis} 
+			WHERE
+				soft_delete = 0 
+				AND pengguna_id IS NOT NULL 
+			GROUP BY
+				substr( CAST ( create_date AS VARCHAR ( 100 )), 0, 8 ) 
+			) rekap ON rekap.tanggal = base_tanggal.tanggal 
+		ORDER BY
+			base_tanggal.tanggal ASC
+		";
+
+		$fetch = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+
+		return $fetch;
+	}
+
+	static function getJenisBerkas(Request $request){
+		$fetch = DB::connection('sqlsrv_2')->table('ref.jenis_berkas')->whereNull('expired_date')->orderBy('jenis_berkas_id','ASC')->get();
+
+		return $fetch;
+	}
+
 	static function getRataKuis(Request $request){
 		$sql = "SELECT
 					* 
@@ -290,7 +511,57 @@ class AppController extends Controller
 		return $fetch->get();
 	}
 
-    public function getWilayah(Request $request){
+	public function getWilayahHirarki(Request $request){
+		$kode_wilayah = $request->input('kode_wilayah') ? $request->input('kode_wilayah') : null;
+		$id_level_wilayah = $request->input('id_level_wilayah') ? $request->input('id_level_wilayah') : null;
+
+		switch ($id_level_wilayah) {
+			case 3:
+				$fetch = DB::connection('sqlsrv_2')->table('ref.mst_wilayah as kec')->where('kec.kode_wilayah','=',$kode_wilayah)
+				->join('ref.mst_wilayah as kab','kab.kode_wilayah','=','kec.mst_kode_wilayah')
+				->join('ref.mst_wilayah as prov','prov.kode_wilayah','=','kab.mst_kode_wilayah')
+				->join('ref.mst_wilayah as nasional','nasional.kode_wilayah','=','prov.mst_kode_wilayah')
+				->select(
+					'kec.nama as kecamatan',
+					'kab.nama as kabupaten',
+					'prov.nama as provinsi',
+					'nasional.nama as negara'
+				)
+				->get();
+				break;
+			case 2:
+				$fetch = DB::connection('sqlsrv_2')->table('ref.mst_wilayah as kab')->where('kab.kode_wilayah','=',$kode_wilayah)
+				->join('ref.mst_wilayah as prov','prov.kode_wilayah','=','kab.mst_kode_wilayah')
+				->join('ref.mst_wilayah as nasional','nasional.kode_wilayah','=','prov.mst_kode_wilayah')
+				->select(
+					'kab.nama as kabupaten',
+					'prov.nama as provinsi',
+					'nasional.nama as negara'
+				)
+				->get();
+				break;
+			case 1:
+				$fetch = DB::connection('sqlsrv_2')->table('ref.mst_wilayah as prov')->where('prov.kode_wilayah','=',$kode_wilayah)
+				->join('ref.mst_wilayah as nasional','nasional.kode_wilayah','=','prov.mst_kode_wilayah')
+				->select(
+					'prov.nama as provinsi',
+					'nasional.nama as negara'
+				)
+				>get();
+				break;
+			default:
+				$fetch = DB::connection('sqlsrv_2')->table('ref.mst_wilayah as nasional')->where('nasional.kode_wilayah','=',$kode_wilayah)
+				->select(
+					'nasional.nama as negara'
+				)
+				->get();
+				break;
+		}
+
+		return $fetch;
+	}
+	
+	public function getWilayah(Request $request){
         $kode_wilayah = $request->input('kode_wilayah') ? $request->input('kode_wilayah') : null;
         $id_level_wilayah = $request->input('id_level_wilayah') ? $request->input('id_level_wilayah') : null;
         $mst_kode_wilayah = $request->input('mst_kode_wilayah') ? $request->input('mst_kode_wilayah') : null;

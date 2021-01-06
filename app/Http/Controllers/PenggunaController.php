@@ -214,6 +214,13 @@ class PenggunaController extends Controller
 
 
         unset($data['password_lama']);
+        unset($data['agama']);
+        unset($data['peran']);
+        unset($data['wilayah']);
+        unset($data['kode_wilayah_provinsi']);
+        unset($data['kode_wilayah_kabupaten']);
+
+        // return $data;die;
 
         if(array_key_exists('password', $data)){
             $data['password'] = md5($data['password']);
@@ -226,20 +233,23 @@ class PenggunaController extends Controller
             //code...
             if($pengguna_id){
                 $execute = DB::connection('sqlsrv_2')->table('pengguna')->where('pengguna_id', '=', DB::raw("'".$pengguna_id."'"))->update($data);
+
+                // return $execute;die;
+            }else{
+                if($username){
+                    $execute = DB::connection('sqlsrv_2')->table('pengguna')->where('username', '=', DB::raw("'".$username."'"))->update($data);
+                }
             }
     
-            if($username){
-                $execute = DB::connection('sqlsrv_2')->table('pengguna')->where('username', '=', DB::raw("'".$username."'"))->update($data);
-            }
             
             if($execute){
-                return array("status" => "berhasil");
+                return array("status" => "berhasil", "row" => DB::connection('sqlsrv_2')->table('pengguna')->where('pengguna_id','=',$pengguna_id)->get());
             }else{
                 return array("status" => "gagal");
             }
 
         } catch (\Throwable $th) {
-            return array("status" => "gagal");
+            return array("status" => "gagal exception");
         }
 
 

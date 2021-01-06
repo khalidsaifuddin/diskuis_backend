@@ -27,6 +27,12 @@ class Cors
             "http://test.one",
             "http://app.diskuis.id",
             "https://app.diskuis.id",
+            "https://mtsmiftahululum.diskuis.id",
+            "http://ict.mtsmubakid.sch.id",
+            "https://ict.mtsmubakid.sch.id",
+            "http://empu.diskuis.id",
+            "http://diskuisbuild:8888",
+            "https://dev.diskuis.id",
             "file://",
             // "http://gamemaster.diskuis.id/",
             null

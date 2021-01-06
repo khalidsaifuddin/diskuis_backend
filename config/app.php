@@ -234,4 +234,9 @@ return [
         'Excel' => Maatwebsite\Excel\Facades\Excel::class,
     ],
 
+    'timezone' => 'Asia/Jakarta',
+    
+    'locale' => 'id',
+    
+    'faker_locale' => 'id_ID',
 ];
