@@ -40,6 +40,13 @@ class SekolahController extends Controller
         );
     }
 
+    public function getSekolahPengguna_excel(Request $request)
+	{
+        $data = self::getSekolahPengguna($request);
+        // return ;die;
+        return view('excel/DaftarGuruExcel', ['return' => json_decode($data)]);
+	}
+
     static function getGuruSiswaPengguna(Request $request){
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
         $tahun_ajaran_id = $request->tahun_ajaran_id ? $request->tahun_ajaran_id : 2020;
@@ -111,6 +118,7 @@ class SekolahController extends Controller
         ->join('sekolah','sekolah.sekolah_id','=','ruang_sekolah.sekolah_id')
         ->join('pengguna','pengguna.pengguna_id','=','ruang.pengguna_id')
         ->where('ruang_sekolah.soft_delete', '=', 0)
+        ->where('ruang.soft_delete', '=', 0)
         ->skip($start)
         ->take($limit)
         ->select(
@@ -174,6 +182,11 @@ class SekolahController extends Controller
         $soft_delete = $request->soft_delete ? $request->soft_delete : '0';
         $ruang_sekolah_id = $request->ruang_sekolah_id ? $request->ruang_sekolah_id : RuangController::generateUUID();
 
+        $siswa_masuk = 0;
+        $siswa_gagal = 0;
+        $siswa_insert = 0;
+        $siswa_update = 0;
+
         $cek = DB::connection('sqlsrv_2')->table('ruang_sekolah')
         ->where('ruang_id', '=', $ruang_id)
         ->where('sekolah_id', '=', $sekolah_id)
@@ -231,11 +244,6 @@ class SekolahController extends Controller
                 AND ruang_id = '".$ruang_id."'"); 
 
             for ($i=0; $i < sizeof($fetch_siswa); $i++) { 
-
-                $siswa_masuk = 0;
-                $siswa_gagal = 0;
-                $siswa_insert = 0;
-                $siswa_update = 0;
 
                 $cek = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
                 ->where('sekolah_id','=',$fetch_siswa[$i]->sekolah_id)
@@ -436,10 +444,13 @@ class SekolahController extends Controller
                     (
                     SELECT
                         pengguna.nama,
-                        pengguna.att_1,
-                        guru.att_2,
+                        pengguna.nik as att_1,
+                        guru.nuptk as att_2,
+                        -- guru.nip as att_2,
                         jenis.nama AS jenis_guru,
                         mapel.nama AS att_3, 
+                        -- null as att_3,
+                        -- pengguna.att_1,
                         pengguna.pengguna_id
                     FROM
                         sekolah_pengguna
@@ -881,6 +892,15 @@ class SekolahController extends Controller
                 'mata_pelajaran_id' => $request->mata_pelajaran_id,
                 'nomor_surat_tugas' => $request->nomor_surat_tugas,
                 'tanggal_surat_tugas' => $request->tanggal_surat_tugas,
+                'status_kepegawaian_id' => $request->status_kepegawaian_id,
+                'niy' => $request->niy,
+                'npk' => $request->npk,
+                'sk_pengangkatan' => $request->sk_pengangkatan,
+                'tmt_pengangkatan' => $request->tmt_pengangkatan,
+                'lembaga_pengangkat_id' => $request->lembaga_pengangkat_id,
+                'sk_cpns' => $request->sk_cpns,
+                'tmt_cpns' => $request->tmt_cpns,
+                'masa_kerja' => $request->masa_kerja,
                 'last_update' => DB::raw('now()::timestamp(0)')
             ]);
 
@@ -897,6 +917,15 @@ class SekolahController extends Controller
                 'mata_pelajaran_id' => $request->mata_pelajaran_id,
                 'nomor_surat_tugas' => $request->nomor_surat_tugas,
                 'tanggal_surat_tugas' => $request->tanggal_surat_tugas,
+                'status_kepegawaian_id' => $request->status_kepegawaian_id,
+                'niy' => $request->niy,
+                'npk' => $request->npk,
+                'sk_pengangkatan' => $request->sk_pengangkatan,
+                'tmt_pengangkatan' => $request->tmt_pengangkatan,
+                'lembaga_pengangkat_id' => $request->lembaga_pengangkat_id,
+                'sk_cpns' => $request->sk_cpns,
+                'tmt_cpns' => $request->tmt_cpns,
+                'masa_kerja' => $request->masa_kerja,
                 'create_date' => DB::raw('now()::timestamp(0)'),
                 'last_update' => DB::raw('now()::timestamp(0)'),
                 'soft_delete' => 0
@@ -926,11 +955,15 @@ class SekolahController extends Controller
         ->table('guru')
         ->leftJoin('ref.jenis_guru as jenis_guru','jenis_guru.jenis_guru_id','=','guru.jenis_guru_id')
         ->leftJoin('ref.mata_pelajaran as mapel','mapel.mata_pelajaran_id','=','guru.mata_pelajaran_id')
+        ->leftJoin('ref.status_kepegawaian as status_kepegawaian','status_kepegawaian.status_kepegawaian_id','=','guru.status_kepegawaian_id')
+        ->leftJoin('ref.lembaga_pengangkat as lembaga_pengangkat','lembaga_pengangkat.lembaga_pengangkat_id','=','guru.lembaga_pengangkat_id')
         ->where('soft_delete','=',0)
         ->select(
             'guru.*',
             'jenis_guru.nama as jenis_guru',
-            'mapel.nama as mata_pelajaran'
+            'mapel.nama as mata_pelajaran',
+            'status_kepegawaian.nama as status_kepegawaian',
+            'lembaga_pengangkat.nama as lembaga_pengangkat'
         )
         ;
 
@@ -1173,13 +1206,37 @@ class SekolahController extends Controller
         $fetch = DB::connection('sqlsrv_2')
         ->table('sekolah')
         ->leftJoin('sekolah_pengguna','sekolah_pengguna.sekolah_id','=','sekolah.sekolah_id')
+        ->leftJoin('ref.mst_wilayah as kec', 'kec.kode_wilayah','=','sekolah.kode_wilayah')
+        ->leftJoin('ref.mst_wilayah as kab', 'kab.kode_wilayah','=','kec.mst_kode_wilayah')
+        ->leftJoin('ref.mst_wilayah as prov', 'prov.kode_wilayah','=','kab.mst_kode_wilayah')
+        ->leftJoin('ref.bentuk_pendidikan as bp','bp.bentuk_pendidikan_id','=','sekolah.bentuk_pendidikan_id')
+        ->leftJoin(DB::raw("(SELECT
+            pengguna.nama AS nama_pengguna,
+            langganan.* 
+        FROM
+            langganan
+            JOIN pengguna ON pengguna.pengguna_id = langganan.pengguna_id 
+        WHERE
+            langganan.soft_delete = 0 
+            AND langganan.status_aktif = 1 
+            AND langganan.tanggal_jatuh_tempo >= now()) langganan_sekolah"), 'langganan_sekolah.sekolah_id','=','sekolah.sekolah_id')
         ->where('sekolah.soft_delete','=',0)
         ->where('sekolah_pengguna.soft_delete','=',0)
         ->select(
+            'langganan_sekolah.langganan_id',
             'sekolah.*',
-            'sekolah_pengguna.*'
+            'sekolah_pengguna.*',
+            'kec.nama as kecamatan',
+            'kab.nama as kabupaten',
+            'prov.nama as provinsi',
+            'kec.kode_wilayah as kode_wilayah_kecamatan',
+            'kab.kode_wilayah as kode_wilayah_kabupaten',
+            'prov.kode_wilayah as kode_wilayah_provinsi',
+            'bp.nama as bentuk'
         )
-        ->orderBy('sekolah.aktif','DESC')
+        ->orderBy('sekolah_pengguna.aktif','DESC')
+        ->orderBy('langganan_sekolah.langganan_id','ASC')
+        ->orderBy('sekolah.create_date','DESC')
         ;
 
         if($pengguna_id && !$administrator){
@@ -1227,6 +1284,7 @@ class SekolahController extends Controller
         $npsn = $request->npsn;
         $keterangan = $request->keterangan;
         $alamat = $request->alamat;
+        $kode_wilayah_kecamatan = $request->kode_wilayah_kecamatan;
         $tipe_sekolah_id = $request->tipe_sekolah_id;
         $gambar_latar = $request->gambar_latar ? $request->gambar_latar : '/assets/berkas/2.jpg';
         $gambar_logo = $request->gambar_logo ? $request->gambar_logo : '/assets/berkas/ava-sekolah.jpg';
@@ -1243,6 +1301,7 @@ class SekolahController extends Controller
                 'npsn' => $npsn,
                 'keterangan' => $keterangan,
                 'alamat' => $alamat,
+                'kode_wilayah' => $kode_wilayah_kecamatan,
                 'gambar_latar' => $gambar_latar,
                 'gambar_logo' => $gambar_logo,
                 'tipe_sekolah_id' => $tipe_sekolah_id,
@@ -1266,6 +1325,7 @@ class SekolahController extends Controller
                 'npsn' => $npsn,
                 'keterangan' => $keterangan,
                 'alamat' => $alamat,
+                'kode_wilayah' => $kode_wilayah_kecamatan,
                 'gambar_latar' => $gambar_latar,
                 'gambar_logo' => $gambar_logo,
                 'tipe_sekolah_id' => $tipe_sekolah_id,
@@ -1306,6 +1366,7 @@ class SekolahController extends Controller
     static function getSekolahPengguna(Request $request){
         $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $keyword = $request->keyword ? $request->keyword : null;
         $jabatan_sekolah_id = $request->jabatan_sekolah_id ? $request->jabatan_sekolah_id : null;
         $ruang_id = $request->ruang_id ? $request->ruang_id : null;
         $tahun_ajaran_id = $request->tahun_ajaran_id ? $request->tahun_ajaran_id : 2020;
@@ -1316,6 +1377,11 @@ class SekolahController extends Controller
         ->join('pengguna','pengguna.pengguna_id','=','sekolah_pengguna.pengguna_id')
         ->join('sekolah','sekolah.sekolah_id','=','sekolah_pengguna.sekolah_id')
         ->join('ref.jabatan_sekolah as jabatan_sekolah','jabatan_sekolah.jabatan_sekolah_id','=','sekolah_pengguna.jabatan_sekolah_id')
+        ->leftJoin('ref.agama as agama','agama.agama_id','=','pengguna.agama_id')
+        ->leftJoin('ref.status_perkawinan as status_perkawinan','status_perkawinan.status_perkawinan_id','=','pengguna.status_perkawinan_id')
+        ->leftJoin('ref.mst_wilayah as kecamatan','kecamatan.kode_wilayah','=','pengguna.kode_wilayah')
+        ->leftJoin('ref.mst_wilayah as kabupaten','kabupaten.kode_wilayah','=','kecamatan.mst_kode_wilayah')
+        ->leftJoin('ref.mst_wilayah as provinsi','provinsi.kode_wilayah','=','kabupaten.mst_kode_wilayah')
         // ->where('sekolah_pengguna.sekolah_id','=',$sekolah_id)
         // ->where('sekolah_pengguna.pengguna_id','=',$pengguna_id)
         ->where('sekolah_pengguna.soft_delete','=',0)
@@ -1328,9 +1394,40 @@ class SekolahController extends Controller
             'sekolah.nama as nama_sekolah',
             'sekolah.gambar_logo',
             'sekolah.gambar_latar',
-            'jabatan_sekolah.nama as jabatan_sekolah'
+            'agama.nama as agama',
+            'kecamatan.nama as kecamatan',
+            'kabupaten.nama as kabupaten',
+            'provinsi.nama as provinsi',
+            'jabatan_sekolah.nama as jabatan_sekolah',
+            'status_perkawinan.nama as status_perkawinan'
         )
         ;
+
+        if((int)$jabatan_sekolah_id === 1){
+            $fetch->leftJoin(DB::raw("(select * from guru where soft_delete = 0 and sekolah_id = '".$sekolah_id."') as guru"),'guru.pengguna_id','=','pengguna.pengguna_id')
+            ->leftJoin('ref.status_kepegawaian as status_kepegawaian','status_kepegawaian.status_kepegawaian_id','=','guru.status_kepegawaian_id')
+            ->leftJoin('ref.jenis_guru as jenis_guru','jenis_guru.jenis_guru_id','=','guru.jenis_guru_id')
+            ->leftJoin('ref.lembaga_pengangkat as lembaga_pengangkat','lembaga_pengangkat.lembaga_pengangkat_id','=','guru.lembaga_pengangkat_id')
+            ->select(
+                'pengguna.*',
+                'guru.*',
+                // 'sekolah.*',
+                'sekolah_pengguna.*',
+                'sekolah.nama as nama_sekolah',
+                'sekolah.gambar_logo',
+                'sekolah.gambar_latar',
+                'agama.nama as agama',
+                'kecamatan.nama as kecamatan',
+                'kabupaten.nama as kabupaten',
+                'provinsi.nama as provinsi',
+                'jabatan_sekolah.nama as jabatan_sekolah',
+                'status_perkawinan.nama as status_perkawinan',
+                'status_kepegawaian.nama as status_kepegawaian',
+                'jenis_guru.nama as jenis_guru',
+                'lembaga_pengangkat.nama as lembaga_pengangkat'
+            )
+            ;
+        }
 
         if((int)$jabatan_sekolah_id === 2){
             $fetch->leftJoin(DB::raw("(SELECT
@@ -1378,6 +1475,10 @@ class SekolahController extends Controller
         if($sekolah_id){
             $fetch->where('sekolah_pengguna.sekolah_id','=',$sekolah_id);
         }
+        
+        if($keyword){
+            $fetch->where('pengguna.nama','ILIKE',DB::raw("'%".$keyword."%'"));
+        }
 
         if($pengguna_id){
             $fetch->where('sekolah_pengguna.pengguna_id','=',$pengguna_id);
@@ -1412,13 +1513,18 @@ class SekolahController extends Controller
 
         }
 
-        return response(
-            [
-                'total' => $fetch->count(),
-                'rows' => $data
-            ],
-            200
-        );
+        if($request->output === 'excel'){
+            return $data;
+        }else{
+            return response(
+                [
+                    'total' => $fetch->count(),
+                    'rows' => $data
+                ],
+                200
+            );
+        }
+
     }
 
     static function simpanSekolahUtama(Request $request){
@@ -1531,6 +1637,28 @@ class SekolahController extends Controller
         $tahun = $request->tahun ? $request->tahun : 2020;
         $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
 
+        // $fetch->leftJoin(DB::raw("(SELECT
+        //         * 
+        //     FROM
+        //         (
+        //         SELECT ROW_NUMBER
+        //             () OVER ( PARTITION BY pengguna_ruang.pengguna_id ORDER BY pengguna_ruang.create_date DESC ) AS urutan,
+        //             pengguna_ruang.*,
+        //             ruang.nama as nama_ruang,
+        //             ruang_sekolah.tahun_ajaran_id 
+        //         FROM
+        //             pengguna_ruang
+        //             JOIN ruang ON ruang.ruang_id = pengguna_ruang.ruang_id
+        //             JOIN ruang_sekolah ON ruang_sekolah.ruang_id = ruang.ruang_id 
+        //         WHERE
+        //             pengguna_ruang.soft_delete = 0 
+        //             AND ruang.soft_delete = 0 
+        //             AND ruang_sekolah.soft_delete = 0 
+        //             AND pengguna_ruang.jabatan_ruang_id = 3 
+        //         ) aaa 
+        //     WHERE
+        //         aaa.urutan = 1) ruangnya_pengguna"),'ruangnya_pengguna.pengguna_id','=','pengguna.pengguna_id')
+
         $sql = "SELECT
             -- 'masuk_' || substring(cast(bulans.tanggal_bulan as varchar(20)),9,2) as tanggalnya,
             extract(dow from  bulans.tanggal_bulan)+1 as urut_hari,
@@ -1555,6 +1683,28 @@ class SekolahController extends Controller
                         SUM ( 1 ) AS total_guru 
                     FROM
                         sekolah_pengguna 
+                        JOIN (SELECT
+                            * 
+                        FROM
+                            (
+                            SELECT ROW_NUMBER
+                                () OVER ( PARTITION BY pengguna_ruang.pengguna_id ORDER BY pengguna_ruang.create_date DESC ) AS urutan,
+                                pengguna_ruang.*,
+                                ruang.nama as nama_ruang,
+                                ruang_sekolah.tahun_ajaran_id 
+                            FROM
+                                pengguna_ruang
+                                JOIN ruang ON ruang.ruang_id = pengguna_ruang.ruang_id
+                                JOIN ruang_sekolah ON ruang_sekolah.ruang_id = ruang.ruang_id 
+                            WHERE
+                                pengguna_ruang.soft_delete = 0 
+                                AND ruang.soft_delete = 0 
+                                AND ruang_sekolah.soft_delete = 0 
+                                AND pengguna_ruang.jabatan_ruang_id = 3 
+                            ) aaa 
+                        WHERE
+                            aaa.urutan = 1) ruangnya_pengguna on ruangnya_pengguna.pengguna_id = sekolah_pengguna.pengguna_id
+                            AND ruangnya_pengguna.tahun_ajaran_id = '2020'
                     WHERE
                         sekolah_pengguna.jabatan_sekolah_id = 2 
                         AND sekolah_pengguna.soft_delete = 0 

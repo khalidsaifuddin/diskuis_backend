@@ -29,32 +29,62 @@ class NotifikasiController extends Controller
     static function getNotifikasiRedis(Request $request){
         $pengguna_id = $request->pengguna_id;
         $tipe = $request->tipe ? $request->tipe : 'semua';
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 20;
+
+        $fetch = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
+        ->join('ref.jenis_notifikasi as jenis','jenis.jenis_notifikasi_id','=','notifikasi_pengguna.jenis_notifikasi_id')
+        ->join('pengguna as pelaku','pelaku.pengguna_id','=','notifikasi_pengguna.pengguna_id_pelaku')
+        ->join('pengguna as penerima','penerima.pengguna_id','=','notifikasi_pengguna.pengguna_id_penerima')
+        ->leftJoin('pengguna as pemilik','pemilik.pengguna_id','=','notifikasi_pengguna.pengguna_id_pemilik')
+        ->leftJoin('sekolah as sekolah','sekolah.sekolah_id','=','notifikasi_pengguna.sekolah_id')
+        ->leftJoin('ruang as ruang','ruang.ruang_id','=','notifikasi_pengguna.ruang_id')
+        ->where('pengguna_id_penerima','=', $pengguna_id)
+        ->where('pelaku.soft_delete','=',0)
+        ->where('penerima.soft_delete','=',0)
+        ->where('notifikasi_pengguna.soft_delete','=',0)
+        ->select(
+            'notifikasi_pengguna.*',
+            'jenis.nama as notifikasi_tipe',
+            'pelaku.nama as pelaku_nama',
+            'penerima.nama as penerima_nama',
+            'pemilik.nama as pemilik_nama',
+            'sekolah.nama as sekolah_nama', 
+            'ruang.nama as ruang_nama',
+            'notifikasi_pengguna.teks as aktivitas_teks',
+            'notifikasi_pengguna.pertanyaan_id as aktivitas_pertanyaan_id',
+            'notifikasi_pengguna.notifikasi_pengguna_id as notifikasi_id'
+        )
+        
+        ;
 
         switch ($tipe) {
             case 'semua':
-                $listNotifikasi = Redis::zRange('notifikasi_semua:'.$pengguna_id, 0, -1);
+                //nggak ngapa2in
                 break;
             case 'belum_dibaca':
-                $listNotifikasi = Redis::zRange('notifikasi_belum_dibaca:'.$pengguna_id, 0, -1);
+                $fetch->where('sudah_dibaca','=',0);
+                $fetch->orderBy('notifikasi_pengguna.create_date', 'DESC');
                 break;
             case 'sudah_dibaca':
-                $listNotifikasi = Redis::zRange('notifikasi_sudah_dibaca:'.$pengguna_id, 0, -1);
+                $fetch->where('sudah_dibaca','=',1);
+                $fetch->orderBy('notifikasi_pengguna.create_date', 'ASC');
                 break;
             default:
-                $listNotifikasi = Redis::zRange('notifikasi_semua:'.$pengguna_id, 0, -1);
+                //nggak ngapa2in    
                 break;
         }
 
-        $arrNotifikasi = array();
+        // $arrNotifikasi = array();
 
-        for ($i=0; $i < sizeof($listNotifikasi); $i++) { 
-            array_push($arrNotifikasi, json_decode(Redis::get($listNotifikasi[$i])));
-        }
+        // for ($i=0; $i < sizeof($listNotifikasi); $i++) { 
+        //     array_push($arrNotifikasi, json_decode(Redis::get($listNotifikasi[$i])));
+        // }
 
         return response(
             [
-                'rows' => $arrNotifikasi,
-                'total' => sizeof($arrNotifikasi),
+                'total' => $fetch->count(),
+                'rows' => $fetch->skip($start)->take($limit)->get(),
                 'tipe' => $tipe
             ],
             200
@@ -67,16 +97,23 @@ class NotifikasiController extends Controller
         $notifikasi_id = $request->notifikasi_id ? $request->notifikasi_id : null;
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
 
-        try {
+        // try {
             Redis::zRem('notifikasi_belum_dibaca:'.$pengguna_id, 'notifikasi:'.$notifikasi_id);
             Redis::zAdd('notifikasi_sudah_dibaca:'.$pengguna_id, sizeof(Redis::zRange('notifikasi_sudah_dibaca:'.$pengguna_id, 0, -1)), 'notifikasi:'.$notifikasi_id);
 
-            $exe = true;
+            $exe = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
+            ->where('notifikasi_pengguna_id','=',$notifikasi_id)
+            ->update([
+                'sudah_dibaca' => 1,
+                'last_update' => DB::raw("now()")
+            ]);
 
-        } catch (\Throwable $th) {
-            //throw $th;
-            $exe = false;
-        }
+            // $exe = true;
+
+        // } catch (\Throwable $th) {
+        //     //throw $th;
+        //     $exe = false;
+        // }
 
         return response(
             [
@@ -164,17 +201,132 @@ class NotifikasiController extends Controller
             $arrNotifikasi['notifikasi_id'] = $notifikasi_id;
             $arrNotifikasi['penerima_pengguna_id'] = $arrPengguna[$j];
 
+
+            //start of redis
             Redis::zAdd('notifikasi_semua:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_semua:'.$arrPengguna[$j], 0, -1)),'notifikasi:'.$notifikasi_id);
             Redis::zAdd('notifikasi_belum_dibaca:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_belum_dibaca:'.$arrPengguna[$j], 0, -1)), 'notifikasi:'.$notifikasi_id);
-            
-
             Redis::set('notifikasi:'.$notifikasi_id, json_encode($arrNotifikasi));
+            //end of redis
+
+            //start of database
+            // return $arrNotifikasi;die;
+
+            
+            $exe = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
+            ->insert([
+                'notifikasi_pengguna_id' => $arrNotifikasi['notifikasi_id'],
+                'jenis_notifikasi_id' => 7,
+                'pengguna_id_pelaku' => $arrNotifikasi['pelaku_pengguna_id'],
+                'pengguna_id_penerima' => $arrNotifikasi['penerima_pengguna_id'],
+                'create_date' => DB::raw("now()"),
+                'last_update' => DB::raw("now()"),
+                'soft_delete' => 0,
+                'sekolah_id' => $arrNotifikasi['sekolah_sekolah_id'],
+                'teks' => $arrNotifikasi['aktivitas_teks'],
+                'pertanyaan_id' => $arrNotifikasi['aktivitas_pertanyaan_id'],
+                'ruang_id' => null,
+                'sudah_dibaca' => 0
+            ]);
+            //end of database
+
+
         }
 
         // Redis::set('notifikasi:'.$pertanyaan_id.':'.$pengguna_id, 'notifikasi baru' );
 
         return $arrPengguna;
     }
+
+
+    // static function simpanNotifikasiSekolah(Request $request){
+    //     $pengguna_id = $request->pengguna_id;
+    //     $pertanyaan_id = $request->pertanyaan_id;
+    //     $sekolah_id = $request->sekolah_id;
+
+    //     $arrPengguna = array();
+
+    //     $arrNotifikasi = array();
+    //     $arrNotifikasi['notifikasi_tipe'] = 'aktivitas_sekolah';
+    //     $arrNotifikasi['pelaku_pengguna_id'] = $pengguna_id;
+    //     $arrNotifikasi['create_date'] = date('Y-m-d H:i:s');
+
+    //     try {
+    //         //pengguna pelakunya
+    //         $data_pengguna = DB::connection('sqlsrv_2')->table('pengguna')->where('pengguna_id','=',$pengguna_id)->first();
+    //     } catch (\Throwable $th) {
+    //         //throw $th;
+    //         $data_pengguna = null;
+    //     }
+
+    //     try {
+    //         $data_sekolah = DB::connection('sqlsrv_2')->table('sekolah')->where('sekolah_id','=',$sekolah_id)->first();
+    //         // array_push($arrPengguna, $data1->pengguna_id);
+
+    //         $arrNotifikasi['sekolah_sekolah_id'] = $data_sekolah->sekolah_id;
+    //         $arrNotifikasi['sekolah_nama'] = $data_sekolah->nama;
+
+    //     } catch (\Throwable $th) {
+    //         //handle error
+    //         $data1 = null;
+    //     }
+
+    //     try {
+    //         $data1 = DB::connection('sqlsrv_2')->table('pertanyaan')->where('pertanyaan_id','=',$pertanyaan_id)->first();
+
+    //     } catch (\Throwable $th) {
+    //         //handle error
+    //         $data1 = null;
+    //     }
+
+    //     $arrNotifikasi['pelaku_nama'] = $data_pengguna->nama;
+    //     $arrNotifikasi['pelaku_username'] = $data_pengguna->username;
+    //     $arrNotifikasi['aktivitas_teks'] = substr(str_replace("&nbsp;"," ",strip_tags($data1->konten)),0,100)."...";
+    //     $arrNotifikasi['aktivitas_pertanyaan_id'] = $pertanyaan_id;
+
+    //     try {
+    //         $data2 = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+    //         ->where('sekolah_id', '=', $sekolah_id)
+    //         ->where('soft_delete', '=', 0)
+    //         ->get();
+    //         // array_push($arrPengguna, $data1->pengguna_id);
+
+    //         for ($i=0; $i < sizeof($data2); $i++) { 
+
+    //             if(in_array($data2[$i]->pengguna_id, $arrPengguna)){
+    //                 //do nothing
+    //             }else{
+
+    //                 if($data2[$i]->pengguna_id !== $pengguna_id){
+    //                     array_push($arrPengguna, $data2[$i]->pengguna_id);
+    //                 }
+
+    //             }
+
+    //         }
+            
+    //     } catch (\Throwable $th) {
+    //         //handle error
+    //     }
+
+    //     for ($j=0; $j < sizeof($arrPengguna); $j++) {   
+    //         $notifikasi_id = self::generateUUID();
+
+    //         // return Redis::zRange('notifikasi_semua:'.$arrPengguna[$j], 0, -1);die;
+
+    //         $arrNotifikasi['notifikasi_id'] = $notifikasi_id;
+    //         $arrNotifikasi['penerima_pengguna_id'] = $arrPengguna[$j];
+
+    //         Redis::zAdd('notifikasi_semua:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_semua:'.$arrPengguna[$j], 0, -1)),'notifikasi:'.$notifikasi_id);
+    //         Redis::zAdd('notifikasi_belum_dibaca:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_belum_dibaca:'.$arrPengguna[$j], 0, -1)), 'notifikasi:'.$notifikasi_id);
+            
+
+    //         Redis::set('notifikasi:'.$notifikasi_id, json_encode($arrNotifikasi));
+    //     }
+
+    //     // Redis::set('notifikasi:'.$pertanyaan_id.':'.$pengguna_id, 'notifikasi baru' );
+
+    //     return $arrPengguna;
+    // }
 
     static function simpanNotifikasiRuang(Request $request){
         $pengguna_id = $request->pengguna_id;
@@ -254,11 +406,29 @@ class NotifikasiController extends Controller
             $arrNotifikasi['notifikasi_id'] = $notifikasi_id;
             $arrNotifikasi['penerima_pengguna_id'] = $arrPengguna[$j];
 
+            // start of redis
             Redis::zAdd('notifikasi_semua:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_semua:'.$arrPengguna[$j], 0, -1)),'notifikasi:'.$notifikasi_id);
             Redis::zAdd('notifikasi_belum_dibaca:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_belum_dibaca:'.$arrPengguna[$j], 0, -1)), 'notifikasi:'.$notifikasi_id);
-            
-
             Redis::set('notifikasi:'.$notifikasi_id, json_encode($arrNotifikasi));
+            // end of redis
+
+            //start of database
+            $exe = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
+            ->insert([
+                'notifikasi_pengguna_id' => $arrNotifikasi['notifikasi_id'],
+                'jenis_notifikasi_id' => 8,
+                'pengguna_id_pelaku' => $arrNotifikasi['pelaku_pengguna_id'],
+                'pengguna_id_penerima' => $arrNotifikasi['penerima_pengguna_id'],
+                'create_date' => DB::raw("now()"),
+                'last_update' => DB::raw("now()"),
+                'soft_delete' => 0,
+                'sekolah_id' => null,
+                'teks' => $arrNotifikasi['aktivitas_teks'],
+                'pertanyaan_id' => $arrNotifikasi['aktivitas_pertanyaan_id'],
+                'ruang_id' => $arrNotifikasi['ruang_ruang_id'],
+                'sudah_dibaca' => 0
+            ]);
+            //end of database
         }
 
         // Redis::set('notifikasi:'.$pertanyaan_id.':'.$pengguna_id, 'notifikasi baru' );
@@ -269,6 +439,7 @@ class NotifikasiController extends Controller
     static function simpanNotifikasiKomentar(Request $request){
         $pengguna_id = $request->input('pengguna_id');
         $pertanyaan_id = $request->input('pertanyaan_id');
+        $tekss = $request->tekss;
 
         $arrPengguna = array();
 
@@ -307,7 +478,8 @@ class NotifikasiController extends Controller
         // return substr(str_replace("&nbsp;"," ",strip_tags($data1->konten)),0,100)."...";die;
         $arrNotifikasi['pelaku_nama'] = $data_pengguna->nama;
         $arrNotifikasi['pelaku_username'] = $data_pengguna->username;
-        $arrNotifikasi['aktivitas_teks'] = substr(str_replace("&nbsp;"," ",strip_tags($data1->konten)),0,100)."...";
+        // $arrNotifikasi['aktivitas_teks'] = substr(str_replace("&nbsp;"," ",strip_tags($data1->konten)),0,100)."...";
+        $arrNotifikasi['aktivitas_teks'] = $tekss;
         $arrNotifikasi['aktivitas_pertanyaan_id'] = $pertanyaan_id;
 
         // return "<b>".$data_pengguna->nama."</b> memberikan komentar pada aktivitas <b></b>"
@@ -345,11 +517,34 @@ class NotifikasiController extends Controller
             $arrNotifikasi['notifikasi_id'] = $notifikasi_id;
             $arrNotifikasi['penerima_pengguna_id'] = $arrPengguna[$j];
 
+            //start of redis
             Redis::zAdd('notifikasi_semua:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_semua:'.$arrPengguna[$j], 0, -1)),'notifikasi:'.$notifikasi_id);
             Redis::zAdd('notifikasi_belum_dibaca:'.$arrPengguna[$j], sizeof(Redis::zRange('notifikasi_belum_dibaca:'.$arrPengguna[$j], 0, -1)), 'notifikasi:'.$notifikasi_id);
-            
-
             Redis::set('notifikasi:'.$notifikasi_id, json_encode($arrNotifikasi));
+            //end of redis
+
+            //start of database
+            // if($arrNotifikasi['pemilik_pengguna_id'] !== $arrNotifikasi['pelaku_pengguna_id']){
+
+                $exe = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
+                ->insert([
+                    'notifikasi_pengguna_id' => $arrNotifikasi['notifikasi_id'],
+                    'jenis_notifikasi_id' => 9,
+                    'pengguna_id_pelaku' => $arrNotifikasi['pelaku_pengguna_id'],
+                    'pengguna_id_penerima' => $arrNotifikasi['penerima_pengguna_id'],
+                    'pengguna_id_pemilik' => $arrNotifikasi['pemilik_pengguna_id'],
+                    'create_date' => DB::raw("now()"),
+                    'last_update' => DB::raw("now()"),
+                    'soft_delete' => 0,
+                    'sekolah_id' => null,
+                    'teks' => $arrNotifikasi['aktivitas_teks'],
+                    'pertanyaan_id' => $arrNotifikasi['aktivitas_pertanyaan_id'],
+                    'ruang_id' => null,
+                    'sudah_dibaca' => 0
+                ]);
+            
+            // }
+            //end of database
         }
 
         // Redis::set('notifikasi:'.$pertanyaan_id.':'.$pengguna_id, 'notifikasi baru' );

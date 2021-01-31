@@ -317,4 +317,195 @@ class SiswaController extends Controller
     static function simpanOrangtua(Request $request){
         return "oke";
     }
+
+    static function getDepositSiswaSekolah(Request $request){
+        $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $keyword = $request->keyword ? $request->keyword : null;
+        $jabatan_sekolah_id = $request->jabatan_sekolah_id ? $request->jabatan_sekolah_id : null;
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+        $tahun_ajaran_id = $request->tahun_ajaran_id ? $request->tahun_ajaran_id : 2020;
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 20;
+
+        $fetch = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+        ->join('pengguna','pengguna.pengguna_id','=','sekolah_pengguna.pengguna_id')
+        ->join('sekolah','sekolah.sekolah_id','=','sekolah_pengguna.sekolah_id')
+        ->join('ref.jabatan_sekolah as jabatan_sekolah','jabatan_sekolah.jabatan_sekolah_id','=','sekolah_pengguna.jabatan_sekolah_id')
+        ->leftJoin('ref.agama as agama','agama.agama_id','=','pengguna.agama_id')
+        ->leftJoin('ref.status_perkawinan as status_perkawinan','status_perkawinan.status_perkawinan_id','=','pengguna.status_perkawinan_id')
+        ->leftJoin('ref.mst_wilayah as kecamatan','kecamatan.kode_wilayah','=','pengguna.kode_wilayah')
+        ->leftJoin('ref.mst_wilayah as kabupaten','kabupaten.kode_wilayah','=','kecamatan.mst_kode_wilayah')
+        ->leftJoin('ref.mst_wilayah as provinsi','provinsi.kode_wilayah','=','kabupaten.mst_kode_wilayah')
+        ->where('sekolah_pengguna.soft_delete','=',0)
+        ->where('pengguna.soft_delete','=',0)
+        ->where('sekolah.soft_delete','=',0)
+        ->select(
+            'pengguna.*',
+            'sekolah_pengguna.*',
+            'sekolah.nama as nama_sekolah',
+            'sekolah.gambar_logo',
+            'sekolah.gambar_latar',
+            'agama.nama as agama',
+            'kecamatan.nama as kecamatan',
+            'kabupaten.nama as kabupaten',
+            'provinsi.nama as provinsi',
+            'jabatan_sekolah.nama as jabatan_sekolah',
+            'status_perkawinan.nama as status_perkawinan'
+        )
+        ;
+
+        $fetch->leftJoin(DB::raw("(SELECT
+            * 
+        FROM
+            (
+            SELECT ROW_NUMBER
+                () OVER ( PARTITION BY pengguna_ruang.pengguna_id ORDER BY pengguna_ruang.create_date DESC ) AS urutan,
+                pengguna_ruang.*,
+                ruang.nama as nama_ruang,
+                ruang_sekolah.tahun_ajaran_id 
+            FROM
+                pengguna_ruang
+                JOIN ruang ON ruang.ruang_id = pengguna_ruang.ruang_id
+                JOIN ruang_sekolah ON ruang_sekolah.ruang_id = ruang.ruang_id 
+            WHERE
+                pengguna_ruang.soft_delete = 0 
+                AND ruang.soft_delete = 0 
+                AND ruang_sekolah.soft_delete = 0 
+                AND pengguna_ruang.jabatan_ruang_id = 3 
+            ) aaa 
+        WHERE
+            aaa.urutan = 1) ruangnya_pengguna"),'ruangnya_pengguna.pengguna_id','=','pengguna.pengguna_id')
+        ->leftJoin(DB::raw("(SELECT
+            pengguna_id,
+            sekolah_id,
+            SUM ( nominal ) AS nominal,
+            max(create_date) as tanggal_transaksi_terakhir 
+        FROM
+            deposit_siswa 
+        WHERE
+            soft_delete = 0 
+            AND sekolah_id = '{$sekolah_id}' 
+        GROUP BY
+            pengguna_id,
+            sekolah_id) as deposit"),'deposit.pengguna_id','=','pengguna.pengguna_id')
+        ->select(
+            'pengguna.*',
+            'sekolah_pengguna.*',
+            'sekolah.nama as nama_sekolah',
+            'sekolah.gambar_logo',
+            'sekolah.gambar_latar',
+            'jabatan_sekolah.nama as jabatan_sekolah',
+            'ruangnya_pengguna.ruang_id',
+            'ruangnya_pengguna.nama_ruang',
+            DB::raw('COALESCE(deposit.nominal,0) as nominal'),
+            'deposit.tanggal_transaksi_terakhir'
+        );
+
+        if($ruang_id){
+            $fetch->where('ruang_id','=',$ruang_id);
+        }
+        
+        if($tahun_ajaran_id){
+            $fetch->where('tahun_ajaran_id','=',$tahun_ajaran_id);
+        }
+
+        if($sekolah_id){
+            $fetch->where('sekolah_pengguna.sekolah_id','=',$sekolah_id);
+        }
+        
+        if($keyword){
+            $fetch->where('pengguna.nama','ILIKE',DB::raw("'%".$keyword."%'"));
+        }
+
+        if($pengguna_id){
+            $fetch->where('sekolah_pengguna.pengguna_id','=',$pengguna_id);
+        }
+        
+        if($jabatan_sekolah_id){
+            $fetch->where('sekolah_pengguna.jabatan_sekolah_id','=',$jabatan_sekolah_id);
+        }
+
+        $data = $fetch->skip($start)->take($limit)->orderBy('sekolah_utama', 'DESC')->get();
+
+        if($request->output === 'excel'){
+            return $data;
+        }else{
+            return response(
+                [
+                    'total' => $fetch->count(),
+                    'rows' => $data
+                ],
+                200
+            );
+        }
+
+    }
+
+    static function simpanDepositSiswa(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $pengguna_id_pelaksana = $request->pengguna_id_pelaksana ? $request->pengguna_id_pelaksana : null;
+        $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
+        $nominal = $request->nominal ? $request->nominal : null;
+        $deposit_siswa_id = RuangController::generateUUID();
+
+        $exe = DB::connection('sqlsrv_2')->table('deposit_siswa')
+        ->insert([
+            'deposit_siswa_id' => $deposit_siswa_id,
+            'pengguna_id' => $pengguna_id,
+            'sekolah_id' => $sekolah_id,
+            'create_date' => DB::raw("now()"),
+            'last_update' => DB::raw("now()"),
+            'soft_delete' => 0,
+            'pengguna_id_pelaksana' => $pengguna_id_pelaksana,
+            'nominal' => $nominal
+        ]);
+
+        return response(
+            [
+                'sukses' => $exe ? true : false,
+                'rows' => DB::connection('sqlsrv_2')->table('deposit_siswa')
+                ->where('deposit_siswa_id','=',$deposit_siswa_id)
+                ->get()
+            ],
+            200
+        );
+    }
+
+    static function getDepositSiswa(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $pengguna_id_pelaksana = $request->pengguna_id_pelaksana ? $request->pengguna_id_pelaksana : null;
+        $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
+        $deposit_siswa_id = $request->deposit_siswa_id ? $request->deposit_siswa_id : null;
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 20;
+
+        $fetch = DB::connection('sqlsrv_2')->table('deposit_siswa')
+        ->where('deposit_siswa.soft_delete','=',0)
+        ;
+
+        if($pengguna_id){
+            $fetch->where('deposit_siswa.pengguna_id','=',$pengguna_id);
+        }
+
+        if($sekolah_id){
+            $fetch->where('deposit_siswa.sekolah_id','=',$sekolah_id);
+        }
+        
+        if($pengguna_id_pelaksana){
+            $fetch->where('deposit_siswa.pengguna_id_pelaksana','=',$pengguna_id_pelaksana);
+        }
+        
+        if($deposit_siswa_id){
+            $fetch->where('deposit_siswa.deposit_siswa_id','=',$deposit_siswa_id);
+        }
+
+        return response(
+            [
+                'total' => $fetch->count(),
+                'rows' => $fetch->orderBy('deposit_siswa.create_date','DESC')->skip($start)->take($limit)->get()
+            ],
+            200
+        );
+    }
 }

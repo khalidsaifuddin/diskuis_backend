@@ -8,6 +8,19 @@ use Illuminate\Support\Str;
 
 class RefController extends Controller
 {
+    public function getRef(Request $request){
+        $nama_tabel = $request->nama_tabel ? $request->nama_tabel : null;
+
+        $return = array();
+
+        $fetch =DB::connection('sqlsrv_2')->table('ref.'.$nama_tabel)->whereNull('expired_date')->get();
+
+        $return['total'] = sizeof($fetch);
+        $return['rows'] = $fetch;
+
+        return $return;
+    }
+
     public function getJenjang(Request $request){
         $return = array();
 

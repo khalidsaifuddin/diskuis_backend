@@ -20,6 +20,11 @@ use Illuminate\Http\Request;
 // Route::prefix('Buku')->group(function () {
 	// });
 
+Route::prefix('Blog')->group(function () {
+	Route::post('simpanArtikel', 'BlogController@simpanArtikel');
+	Route::post('getArtikel', 'BlogController@getArtikel');
+});
+
 Route::prefix('Pertanyaan')->group(function () {
 	Route::post('simpanPantauan', 'PertanyaanController@simpanPantauan');
 	Route::post('simpanPertanyaan', 'PertanyaanController@simpanPertanyaan');
@@ -101,6 +106,7 @@ Route::prefix('Ruang')->group(function () {
 	Route::post('simpanRuang', 'RuangController@simpanRuang');
 	Route::post('simpanPertanyaanRuang', 'RuangController@simpanPertanyaanRuang');
 	Route::post('simpanPenggunaRuang', 'RuangController@simpanPenggunaRuang');
+	Route::post('simpanPenggunaRuangBulk', 'RuangController@simpanPenggunaRuangBulk');
 	Route::post('getRuang', 'RuangController@getRuang');
 	Route::post('getPenggunaRuang', 'RuangController@getPenggunaRuang');
 	Route::post('upload', 'RuangController@upload');
@@ -109,8 +115,16 @@ Route::prefix('Ruang')->group(function () {
 	Route::post('hapusRuang', 'RuangController@hapusRuang');
 });
 
+Route::prefix('Poin')->group(function () {
+	Route::post('getLeaderboardPengguna', 'PoinController@getLeaderboardPengguna');
+	Route::post('getLeaderboardGlobal', 'PoinController@getLeaderboardGlobal');
+});
+
 Route::prefix('Siswa')->group(function () {
 	Route::post('getSiswaSekolah', 'SiswaController@getSiswaSekolah');
+	Route::post('getDepositSiswaSekolah', 'SiswaController@getDepositSiswaSekolah');
+	Route::post('simpanDepositSiswa', 'SiswaController@simpanDepositSiswa');
+	Route::post('getDepositSiswa', 'SiswaController@getDepositSiswa');
 	Route::post('getKehadiranRuang', 'SiswaController@getKehadiranRuang');
 	Route::post('getSiswa', 'SiswaController@getSiswa');
 	Route::post('getOrangtua', 'SiswaController@getOrangtua');
@@ -119,9 +133,27 @@ Route::prefix('Siswa')->group(function () {
 	Route::post('simpanKehadiranRuang', 'SiswaController@simpanKehadiranRuang');
 });
 
+Route::prefix('Pesan')->group(function () {
+	Route::post('simpanKelompokPesan', 'PesanController@simpanKelompokPesan');
+	Route::post('getKelompokPesan', 'PesanController@getKelompokPesan');
+	Route::post('simpanPesan', 'PesanController@simpanPesan');
+	Route::post('getPesan', 'PesanController@getPesan');
+	Route::post('getDaftarPesan', 'PesanController@getDaftarPesan');
+	Route::post('simpanPesanDibaca', 'PesanController@simpanPesanDibaca');
+});
+
 Route::prefix('Tugas')->group(function () {
 	Route::post('simpanTugas', 'TugasController@simpanTugas');
 	Route::post('getTugas', 'TugasController@getTugas');
+});
+
+Route::prefix('UnitUsaha')->group(function () {
+	Route::post('simpanUnitUsaha', 'UnitUsahaController@simpanUnitUsaha');
+	Route::post('getUnitUsaha', 'UnitUsahaController@getUnitUsaha');
+});
+
+Route::prefix('Langganan')->group(function () {
+	Route::post('getLangganan', 'LanggananController@getLangganan');
 });
 
 Route::prefix('Playlist')->group(function () {
@@ -164,6 +196,8 @@ Route::prefix('Sekolah')->group(function () {
 	Route::post('getTahunAjaran', 'SekolahController@getTahunAjaran');
 	Route::post('simpanRuangSekolah', 'SekolahController@simpanRuangSekolah');
 	Route::post('getRuangSekolah', 'SekolahController@getRuangSekolah');
+
+	Route::get('getSekolahPengguna_excel', 'SekolahController@getSekolahPengguna_excel');
 });
 
 
@@ -171,12 +205,14 @@ Route::prefix('Ref')->group(function () {
 	Route::post('getJenjang', 'RefController@getJenjang');
 	Route::post('getTingkatPendidikan', 'RefController@getTingkatPendidikan');
 	Route::post('getMataPelajaran', 'RefController@getMataPelajaran');
+	Route::post('getRef', 'RefController@getRef');
 });
 
 Route::prefix('Otentikasi')->group(function () {
 	Route::post('masuk', 'PenggunaController@authenticate');
 	Route::post('getPengguna', 'PenggunaController@getPengguna');
 	Route::post('simpanPengguna', 'PenggunaController@simpanPengguna');
+	Route::post('simpanPenggunaManual', 'PenggunaController@simpanPenggunaManual');
 	Route::post('buatPengguna', 'PenggunaController@buatPengguna');
 	Route::post('daftarPengguna', 'PenggunaController@daftarPengguna');
 	Route::post('upload', 'PenggunaController@upload');
@@ -202,6 +238,20 @@ Route::prefix('app')->group(function () {
 	Route::post('getRekapBulanan', 'AppController@getRekapBulanan');
 	Route::post('getRekapKumulatif', 'AppController@getRekapKumulatif');
 	Route::post('getRekapBulananKumulatif', 'AppController@getRekapBulananKumulatif');
+});
+
+Route::prefix('PPDB')->group(function () {
+	Route::post('getCalonPesertaDidik', 'PPDBController@getCalonPesertaDidik');
+	Route::post('getPesertaDidikDapodik', 'PPDBController@getPesertaDidikDapodik');
+	Route::post('cekNik', 'PPDBController@cekNik');
+	Route::post('cekNisn', 'PPDBController@cekNisn');
+	Route::post('simpanCalonPesertaDidik', 'PPDBController@simpanCalonPesertaDidik');
+	Route::post('simpanLintangBujur', 'PPDBController@simpanLintangBujur');
+	Route::post('getJalur', 'PPDBController@getJalur');
+	Route::post('getSekolahPPDB', 'PPDBController@getSekolahPPDB');
+	Route::post('simpanSekolahPilihan', 'PPDBController@simpanSekolahPilihan');
+	Route::post('getSekolahPilihan', 'PPDBController@getSekolahPilihan');
+	Route::post('getJalurBerkas', 'PPDBController@getJalurBerkas');
 });
 
 Route::middleware('token')->group(function(){

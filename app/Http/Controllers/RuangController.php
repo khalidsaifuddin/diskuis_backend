@@ -128,9 +128,164 @@ class RuangController extends Controller
         return '{"status": true, "berhasil": '.$berhasil.', "gagal": '.$gagal.', "skip": '.$skip.'}';
     }
 
+    static public function simpanPenggunaRuangBulk(Request $request){
+        $ruang_id = $request->input('ruang_id');
+        $jabatan_ruang_id = $request->input('jabatan_ruang_id') ? $request->input('jabatan_ruang_id') : '4';
+        $soft_delete = $request->input('soft_delete') ? $request->input('soft_delete') : '0';
+
+        $arrPengguna = json_decode($request->arrPengguna);
+
+        $pengguna_ruang_berhasil = 0;
+        $pengguna_ruang_gagal = 0;
+        $linimasa_berhasil = 0;
+        $linimasa_gagal = 0;
+        $sekolah_pengguna_berhasil = 0;
+        $sekolah_pengguna_gagal = 0;
+
+        for ($i=0; $i < sizeof($arrPengguna); $i++) { 
+
+            $fetch_cek = DB::connection('sqlsrv_2')->table('pengguna_ruang')
+            ->where('ruang_id','=', $ruang_id)
+            ->where('pengguna_id','=', $arrPengguna[$i]->pengguna_id)
+            ->get();
+
+            if(sizeof($fetch_cek) > 0){
+                
+                //sudah ada
+                $exe = DB::connection('sqlsrv_2')->table('pengguna_ruang')
+                ->where('ruang_id','=', $ruang_id)
+                ->where('pengguna_id','=', $arrPengguna[$i]->pengguna_id)
+                ->update([
+                    'last_update' => DB::raw('now()'),
+                    'soft_delete' => $soft_delete,
+                    'jabatan_ruang_id' => $jabatan_ruang_id,
+                    'no_absen' => ($request->input('no_absen') ? $request->input('no_absen') : null),
+                    'jabatan_ruang_id' => $jabatan_ruang_id
+                ]);
+    
+            }else{
+
+                //belum ada
+                $exe = DB::connection('sqlsrv_2')->table('pengguna_ruang')->insert([
+                    'ruang_id' => $ruang_id,
+                    'pengguna_id' => $arrPengguna[$i]->pengguna_id,
+                    'no_absen' => ($request->input('no_absen') ? $request->input('no_absen') : null),
+                    'jabatan_ruang_id' => $jabatan_ruang_id
+                ]);
+
+            }
+
+            if($exe){
+                
+                $pengguna_ruang_berhasil++;
+
+                //simpan linimasa
+                try {
+                    //code...
+                    if(sizeof($fetch_cek) > 0){
+                        //nggak disimpan
+                        // $return['sukses_linimasa'] = false;
+                        $linimasa_berhasil++;
+                    }else{
+                        //disimpan
+                        $linimasa_id = self::generateUUID();
+                        $linimasa = LinimasaController::simpanLinimasa($linimasa_id, $arrPengguna[$i]->pengguna_id, 1, '', '', $ruang_id, null);
+            
+                        if($linimasa){
+                            $linimasa_berhasil++;
+                        }else{
+                            $linimasa_gagal++;
+                        }
+                    }
+
+                } catch (\Throwable $th) {
+                    $linimasa_gagal++;
+                }
+
+                try {
+
+                    if((int)$jabatan_ruang_id === 3){
+                        
+                        $sql = "SELECT * FROM ruang_sekolah WHERE ruang_id = '".$ruang_id."'";
+        
+                        $data_ruang_sekolah = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+        
+                        for ($iRuangSekolah=0; $iRuangSekolah < sizeof($data_ruang_sekolah); $iRuangSekolah++) { 
+                            $cek_sekolah_pengguna = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                            ->where('sekolah_id','=', $data_ruang_sekolah[$iRuangSekolah]->sekolah_id)
+                            ->where('pengguna_id','=', $arrPengguna[$i]->pengguna_id)
+                            ->get();
+                            ;
+        
+                            if(sizeof($cek_sekolah_pengguna) > 0){
+                                //update
+                                $exe = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                                    ->where('sekolah_id','=', $data_ruang_sekolah[$iRuangSekolah]->sekolah_id)
+                                    ->where('pengguna_id','=', $arrPengguna[$i]->pengguna_id)
+                                    ->update([
+                                        'soft_delete' => 0,
+                                        'valid' => 1,
+                                        'last_update' => DB::raw("now()")
+                                    ]);
+                            }else{
+                                //insert
+                                $exe = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                                ->insert([
+                                    'sekolah_pengguna_id' => RuangController::generateUUID(),
+                                    'sekolah_id' => $data_ruang_sekolah[$iRuangSekolah]->sekolah_id,
+                                    'pengguna_id' => $arrPengguna[$i]->pengguna_id,
+                                    'pendiri' => 0,
+                                    'administrator' => 0,
+                                    'jabatan_sekolah_id' => 2,
+                                    'valid' => 1,
+                                    'create_date' => DB::raw('now()::timestamp(0)'),
+                                    'last_update' => DB::raw('now()::timestamp(0)'),
+                                    'soft_delete' => 0
+                                ]);
+                            }
+                        }
+                        
+                        $sekolah_pengguna_berhasil++;
+    
+                    }else{
+                        $sekolah_pengguna_gagal++;
+                    }
+    
+    
+                } catch (\Throwable $th) {
+                    $sekolah_pengguna_gagal++;
+                }
+
+            }else{
+
+                $pengguna_ruang_gagal++;
+
+            }
+
+        }
+
+        $return = array();
+        $return['pengguna_ruang'] = array(
+            'berhasil' => $pengguna_ruang_berhasil,
+            'gagal' => $pengguna_ruang_gagal
+        );
+        $return['linimasa'] = array(
+            'berhasil' => $linimasa_berhasil,
+            'gagal' => $linimasa_gagal
+        );
+        $return['sekolah_pengguna'] = array(
+            'berhasil' => $sekolah_pengguna_berhasil,
+            'gagal' => $sekolah_pengguna_gagal
+        );
+
+        return $return;
+
+    }
+
     static public function simpanPenggunaRuang(Request $request){
         $ruang_id = $request->input('ruang_id');
         $pengguna_id = $request->input('pengguna_id');
+        $jabatan_ruang_id = $request->input('jabatan_ruang_id') ? $request->input('jabatan_ruang_id') : '4';
         $soft_delete = $request->input('soft_delete') ? $request->input('soft_delete') : '0';
 
         $fetch_cek = DB::connection('sqlsrv_2')->table('pengguna_ruang')
@@ -146,8 +301,9 @@ class RuangController extends Controller
             ->update([
                 'last_update' => DB::raw('now()'),
                 'soft_delete' => $soft_delete,
+                'jabatan_ruang_id' => $jabatan_ruang_id,
                 'no_absen' => ($request->input('no_absen') ? $request->input('no_absen') : null),
-                'jabatan_ruang_id' => ($request->input('jabatan_ruang_id') ? $request->input('jabatan_ruang_id') : $fetch_cek[0]->jabatan_ruang_id)
+                'jabatan_ruang_id' => $jabatan_ruang_id
             ]);
 
         }else{
@@ -156,7 +312,7 @@ class RuangController extends Controller
                 'ruang_id' => $ruang_id,
                 'pengguna_id' => $pengguna_id,
                 'no_absen' => ($request->input('no_absen') ? $request->input('no_absen') : null),
-                'jabatan_ruang_id' => ($request->input('jabatan_ruang_id') ? $request->input('jabatan_ruang_id') : '4')
+                'jabatan_ruang_id' => $jabatan_ruang_id
             ]);
         }
 
@@ -186,6 +342,62 @@ class RuangController extends Controller
 
             } catch (\Throwable $th) {
                 $return['sukses_linimasa'] = false;
+            }
+
+            //simpan sekolah pengguna kalau ruang ini tergabung juga ke sekolah
+            try {
+
+                if((int)$jabatan_ruang_id === 3){
+                    
+                    $sql = "SELECT * FROM ruang_sekolah WHERE ruang_id = '".$ruang_id."'";
+    
+                    $data_ruang_sekolah = DB::connection('sqlsrv_2')->select(DB::raw($sql));
+    
+                    for ($iRuangSekolah=0; $iRuangSekolah < sizeof($data_ruang_sekolah); $iRuangSekolah++) { 
+                        $cek_sekolah_pengguna = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                        ->where('sekolah_id','=', $data_ruang_sekolah[$iRuangSekolah]->sekolah_id)
+                        ->where('pengguna_id','=', $pengguna_id)
+                        ->get();
+                        ;
+    
+                        if(sizeof($cek_sekolah_pengguna) > 0){
+                            //update
+                            $exe = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                                ->where('sekolah_id','=', $data_ruang_sekolah[$iRuangSekolah]->sekolah_id)
+                                ->where('pengguna_id','=', $pengguna_id)
+                                ->update([
+                                    'soft_delete' => $soft_delete,
+                                    'jabatan_sekolah_id' => 2,
+                                    'valid' => 1,
+                                    'last_update' => DB::raw("now()")
+                                ]);
+                        }else{
+                            //insert
+                            $exe = DB::connection('sqlsrv_2')->table('sekolah_pengguna')
+                            ->insert([
+                                'sekolah_pengguna_id' => RuangController::generateUUID(),
+                                'sekolah_id' => $data_ruang_sekolah[$iRuangSekolah]->sekolah_id,
+                                'pengguna_id' => $pengguna_id,
+                                'pendiri' => 0,
+                                'administrator' => 0,
+                                'jabatan_sekolah_id' => 2,
+                                'valid' => 1,
+                                'create_date' => DB::raw('now()::timestamp(0)'),
+                                'last_update' => DB::raw('now()::timestamp(0)'),
+                                'soft_delete' => $soft_delete
+                            ]);
+                        }
+                    }
+                    
+                    $return['sukses_sekolah_pengguna'] = $exe ? true : false;
+
+                }else{
+                    $return['sukses_sekolah_pengguna'] = false;
+                }
+
+
+            } catch (\Throwable $th) {
+                $return['sukses_sekolah_pengguna'] = false;
             }
 
         }else{

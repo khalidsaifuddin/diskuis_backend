@@ -33,6 +33,8 @@ class Cors
             "http://empu.diskuis.id",
             "http://diskuisbuild:8888",
             "https://dev.diskuis.id",
+            "http://localhost:3000",
+            "https://diskuis.id",
             "file://",
             // "http://gamemaster.diskuis.id/",
             null

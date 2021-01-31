@@ -14,6 +14,7 @@ use Tymon\JWTAuth\Facades\JWTFactory;
 
 use App\Http\Controllers\RuangController;
 use App\Http\Controllers\LinimasaController;
+use App\Http\Controllers\PoinController;
 
 use App\Http\Middleware\S3;
 
@@ -1293,10 +1294,10 @@ class KuisController extends Controller
             ->update([
                 'status_mengerjakan_id' => ($status_mengerjakan_id ? $status_mengerjakan_id : 1),
                 'pertanyaan_kuis_id_terakhir' => $pertanyaan_kuis_id_terakhir,
-                'skor' => $skor,
+                'skor' => (int)$skor <= 100 ? $skor : 100,
                 'total' => $total,
-                'benar' => $benar,
-                'salah' => $salah,
+                'benar' => (int)$benar <= (int)$total ? $benar : $total,
+                'salah' => (int)$salah <= $total ? $salah : $total,
                 'durasi' => $durasi,
                 'last_update' => date('Y-m-d H:i:s')
             ]);
@@ -1315,9 +1316,27 @@ class KuisController extends Controller
                 'pertanyaan_kuis_id_terakhir' => $pertanyaan_kuis_id_terakhir
             ]);
             $label = 'INSERT';
+
         }
 
         $return = array();
+        
+        if($status_mengerjakan_id === 2){
+            
+            try {
+                // rekam poin pengguna kalau sudah selesai
+                $exePoin        = PoinController::simpanPoin($pengguna_id, date('Y-m-d H:i:s'), 1, $kuis_id, $sesi_kuis_id, (int)$skor <= 100 ? $skor : 100);
+                $exePoinJariyah = PoinController::simpanPoin($pengguna_id, date('Y-m-d H:i:s'), 3, $kuis_id, $sesi_kuis_id, (int)$skor <= 100 ? $skor : 100);
+
+                $return['poin'] = $exePoin ? true : false;
+                $return['poin_jariyah'] = $exePoinJariyah ? true : false;
+            
+            } catch (\Throwable $th) {
+                //do nothing
+            }
+
+        }
+
 
         if($exe){
             $return['rows'] = DB::connection('sqlsrv_2')->table('pengguna_kuis')
@@ -1759,6 +1778,20 @@ class KuisController extends Controller
                     'kode_sesi' => strtoupper(RuangController::generateRandomString(10))
                 ]);
 
+                //tambah poin kalau buat kuis
+                try {
+                    // rekam poin pengguna kalau sudah selesai
+                    $exePoin = PoinController::simpanPoin($data['pengguna_id'], date('Y-m-d H:i:s'), 2, $data['kuis_id'], null, 150);
+                    
+                    // $return['poin'] = $exePoin ? true : false;
+                    
+                } catch (\Throwable $th) {
+                    //do nothing
+                    $exePoin = false;
+                }
+
+            }else{
+                $exePoin = false;
             }
 
             //tambah ke kuis_ruang
@@ -1788,7 +1821,8 @@ class KuisController extends Controller
                 [
                     'success' => true,
                     // 'success' => ($exe ? ($exeSesiKuis ? true : false) : false),
-                    'kuis_id' => $data['kuis_id']
+                    'kuis_id' => $data['kuis_id'],
+                    'poin' => $exePoin ? true : false
                 ],
                 200
             );

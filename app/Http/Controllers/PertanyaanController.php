@@ -132,10 +132,8 @@ class PertanyaanController extends Controller
         AND (pertanyaan_ruang.pertanyaan_id IS NOT NULL OR pertanyaan_sekolah.pertanyaan_id IS NOT NULL)
         UNION
         SELECT
-            -- pertanyaan_ruang.pertanyaan_id AS pertanyaan_id_ruang,
             null as pertanyaan_id_ruang,
             pertanyaan_sekolah.pertanyaan_id AS pertanyaan_id_sekolah,
-            -- pertanyaan_ruang.ruang_id,
             null as ruang_id,
             pertanyaan_sekolah.sekolah_id,
             pengguna.nama AS nama,
@@ -147,14 +145,15 @@ class PertanyaanController extends Controller
         JOIN pengikut_pengguna ON pengikut_pengguna.pengguna_id = pengguna.pengguna_id
         AND pengikut_pengguna.soft_delete = 0 
         AND pengikut_pengguna.pengguna_id_pengikut = '".$pengguna_id."'
-        -- LEFT JOIN pertanyaan_ruang ON pertanyaan_ruang.pertanyaan_id = pertanyaan.pertanyaan_id 
-        -- AND pertanyaan_ruang.soft_delete = 0
         LEFT JOIN pertanyaan_sekolah ON pertanyaan_sekolah.pertanyaan_id = pertanyaan.pertanyaan_id 
-        AND pertanyaan_sekolah.soft_delete = 0 
+        AND pertanyaan_sekolah.soft_delete = 0
+        LEFT JOIN pertanyaan_ruang ON pertanyaan_ruang.pertanyaan_id = pertanyaan.pertanyaan_id 
+		AND pertanyaan_ruang.soft_delete = 0	 
         WHERE
             pertanyaan.soft_delete = 0 
         AND pertanyaan.jenis_pertanyaan_aktivitas_id = 1 
-        -- AND pertanyaan_ruang.pertanyaan_id IS NULL 
+        
+        AND pertanyaan_ruang.pertanyaan_id IS NULL
         AND pertanyaan_sekolah.pertanyaan_id IS NULL
         UNION
         SELECT
@@ -656,6 +655,8 @@ class PertanyaanController extends Controller
         $pengguna_id = $request->input('pengguna_id') ? $request->input('pengguna_id') : null;
         $pertanyaan_id = $request->input('pertanyaan_id') ? $request->input('pertanyaan_id') : null;
         $jawaban_id = $request->input('jawaban_id') ? $request->input('jawaban_id') : null;
+        $start = $request->start ? $request->start : 0;
+        $limit = $request->limit ? $request->limit : 30;
         $return = array();
 
         $fetch = DB::connection('sqlsrv_2')->table('jawaban')
@@ -694,7 +695,6 @@ class PertanyaanController extends Controller
             DB::raw('COALESCE(dukungan.jumlah_dukungan,0) as jumlah_dukungan'),
             'dukungan_pengguna.pengguna_id as dukungan_pengguna_id'
         )
-        ->take(20)
         ->orderBy('create_date','ASC');
 
         // return $fetch->toSql();die;
@@ -711,7 +711,12 @@ class PertanyaanController extends Controller
             $fetch->where('jawaban.jawaban_id','=',$jawaban_id);
         }
 
-        $fetch = $fetch->get();
+        $count = $fetch->count();
+
+        $fetch = $fetch
+        ->skip($start)
+        ->take($limit)
+        ->get();
 
         for ($iFetch=0; $iFetch < sizeof($fetch); $iFetch++) { 
             //cari komentar
@@ -725,7 +730,7 @@ class PertanyaanController extends Controller
         }
 
         $return['rows'] = $fetch;
-        $return['result'] = sizeof($fetch);
+        $return['result'] = $count;
 
         return $return;
     }

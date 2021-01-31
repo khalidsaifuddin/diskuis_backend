@@ -174,7 +174,7 @@ foreach ($dataObj as $value) {
 //   $object->getActiveSheet()->getStyle("C".$num)->getNumberFormat()->setFormatCode(PHPExcel_Style_NumberFormat::FORMAT_TEXT);
 //   $object->getActiveSheet()->getStyle("C".$num)->getNumberFormat()->setFormatCode(PHPExcel_Style_NumberFormat::FORMAT_NUMBER);
 
-  $num ++;
+  $num++;
   $no++;
 }
 
