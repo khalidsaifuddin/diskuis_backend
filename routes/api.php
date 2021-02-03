@@ -252,6 +252,10 @@ Route::prefix('PPDB')->group(function () {
 	Route::post('simpanSekolahPilihan', 'PPDBController@simpanSekolahPilihan');
 	Route::post('getSekolahPilihan', 'PPDBController@getSekolahPilihan');
 	Route::post('getJalurBerkas', 'PPDBController@getJalurBerkas');
+	Route::post('simpanBerkasCalon', 'PPDBController@simpanBerkasCalon');
+	Route::post('simpanKonfirmasi', 'PPDBController@simpanKonfirmasi');
+	Route::post('getJadwal', 'PPDBController@getJadwal');
+	Route::post('getStatistikSekolah', 'PPDBController@getStatistikSekolah');
 });
 
 Route::middleware('token')->group(function(){

@@ -35,6 +35,7 @@ class Cors
             "https://dev.diskuis.id",
             "http://localhost:3000",
             "https://diskuis.id",
+            "http://117.53.47.43:8060",
             "file://",
             // "http://gamemaster.diskuis.id/",
             null
