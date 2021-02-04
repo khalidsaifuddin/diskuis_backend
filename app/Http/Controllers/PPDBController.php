@@ -461,6 +461,49 @@ class PPDBController extends Controller
 		
 	}
 
+	static function getJenisPrestasi(Request $request){
+		$jenis_prestasi_id = $request->jenis_prestasi_id ? $request->jenis_prestasi_id : null;
+		$start = $request->start ? $request->start : 0;
+		$limit = $request->limit ? $request->limit : 20;
+
+		$fetch = DB::connection('sqlsrv_2')->table('ref_ppdb.jenis_prestasi')
+		->whereNull('expired_date')
+		;
+
+		if($jenis_prestasi_id){
+			$fetch->where('jenis_prestasi_id','=',$jenis_prestasi_id);
+		}
+
+		$return = array();
+        $return['total'] = $fetch->count();
+        $return['rows'] = $fetch->skip($start)->take($limit)->get();
+
+        return $return;
+		
+	}
+
+	
+	static function getTingkatPrestasi(Request $request){
+		$tingkat_prestasi_id = $request->tingkat_prestasi_id ? $request->tingkat_prestasi_id : null;
+		$start = $request->start ? $request->start : 0;
+		$limit = $request->limit ? $request->limit : 20;
+
+		$fetch = DB::connection('sqlsrv_2')->table('ref_ppdb.tingkat_prestasi')
+		->whereNull('expired_date')
+		;
+
+		if($tingkat_prestasi_id){
+			$fetch->where('tingkat_prestasi_id','=',$tingkat_prestasi_id);
+		}
+
+		$return = array();
+        $return['total'] = $fetch->count();
+        $return['rows'] = $fetch->skip($start)->take($limit)->get();
+
+        return $return;
+		
+	}
+
 	static function cekSekolahPilihan(Request $request){
 		$sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
 		$pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
@@ -749,7 +792,7 @@ class PPDBController extends Controller
 		}
 
 		return response([ 
-			'sukses' => $fetch->count(), 
+			'total' => $fetch->count(), 
 			'rows' => $fetch->orderBy('waktu_mulai','ASC')->get()
 		], 200);
 	}
@@ -788,6 +831,83 @@ class PPDBController extends Controller
 		$fetch = DB::connection('sqlsrv_2')->select($sql);
 
 		return $fetch;
+	}
+
+	public function simpanNilaiPrestasi(Request $request){
+		$pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+		$peserta_didik_id = $request->peserta_didik_id ? $request->peserta_didik_id : null;
+		$jenis_prestasi_id = $request->jenis_prestasi_id ? $request->jenis_prestasi_id : null; 
+		$tingkat_prestasi_id = $request->tingkat_prestasi_id ? $request->tingkat_prestasi_id : null;
+		$nilai_semester_1 = $request->nilai_semester_1;
+		$nilai_semester_2 = $request->nilai_semester_2;
+		$nilai_semester_3 = $request->nilai_semester_3;
+		$nilai_semester_4 = $request->nilai_semester_4;
+		$nilai_semester_5 = $request->nilai_semester_5;
+		
+		$cek = DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+		->where('peserta_didik_id','=',$peserta_didik_id)
+		->get();
+
+		if(sizeof($cek) > 0){
+			//update
+			$exe = DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+			->where('peserta_didik_id','=',$peserta_didik_id)
+			->update([
+				'soft_delete' => 0,
+				'last_update' => DB::raw("now()"),
+				'pengguna_id' => $pengguna_id,
+				'jenis_prestasi_id' => $jenis_prestasi_id,
+				'tingkat_prestasi_id' => $tingkat_prestasi_id,
+				'nilai_semester_1' => $nilai_semester_1,
+				'nilai_semester_2' => $nilai_semester_2,
+				'nilai_semester_3' => $nilai_semester_3,
+				'nilai_semester_4' => $nilai_semester_4,
+				'nilai_semester_5' => $nilai_semester_5
+			]);
+
+		}else{
+			//insert
+			$exe = DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+			->insert([
+				'nilai_prestasi_id' => RuangController::generateUUID(),
+				'soft_delete' => 0,
+				'create_date' => DB::raw("now()"),
+				'last_update' => DB::raw("now()"),
+				'pengguna_id' => $pengguna_id,
+				'peserta_didik_id' => $peserta_didik_id,
+				'jenis_prestasi_id' => $jenis_prestasi_id,
+				'tingkat_prestasi_id' => $tingkat_prestasi_id,
+				'nilai_semester_1' => $nilai_semester_1,
+				'nilai_semester_2' => $nilai_semester_2,
+				'nilai_semester_3' => $nilai_semester_3,
+				'nilai_semester_4' => $nilai_semester_4,
+				'nilai_semester_5' => $nilai_semester_5
+			]);
+		}
+
+		return response([ 
+			'sukses' => $exe ? true : false, 
+			'rows' => DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+			->where('peserta_didik_id','=',$peserta_didik_id)
+			->where('soft_delete','=',0)
+			->get()
+		], 200);
+	}
+
+	public function getNilaiPrestasi(Request $request){
+		$peserta_didik_id = $request->peserta_didik_id;
+
+		$fetch = DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+		->where('peserta_didik_id','=',$peserta_didik_id)
+		->where('soft_delete','=',0)
+		;
+		// ->get()
+
+		return response([ 
+			'total' => $fetch->count(), 
+			'rows' => $fetch->get()
+		], 200);
+
 	}
 
 }
