@@ -139,6 +139,7 @@ class PPDBController extends Controller
     static function getPesertaDidikDapodik(Request $request){
         $keyword = $request->keyword ? $request->keyword : null;
         $peserta_didik_id = $request->peserta_didik_id ? $request->peserta_didik_id : null;
+        $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
         $start = $request->start ? $request->start : 0;
         $limit = $request->limit ? $request->limit : 20;
 
@@ -163,7 +164,27 @@ class PPDBController extends Controller
 
         if($peserta_didik_id){
             $fetch->where('peserta_didik_id','=',$peserta_didik_id);
-        }
+		}
+		
+		if($sekolah_id){
+			$fetch_sekolah = DB::connection('sqlsrv_2')->table('sekolah')
+			->where('sekolah_id','=',$sekolah_id)
+			->first();
+
+			if($fetch_sekolah){
+				switch ($fetch_sekolah->bentuk_pendidikan_id) {
+					case 5:
+						$fetch->whereNotIn('tingkat_pendidikan_id',array(1,2,3,4,5,6,7,8,9,10,11,12,13,14));
+						break;
+					case 6:
+						$fetch->whereIn('tingkat_pendidikan_id',array(4,5,6));
+						break;
+					default:
+						# code...
+						break;
+				}
+			}
+		}
 
         $return = array();
         $return['total'] = $fetch->count();
@@ -428,6 +449,28 @@ class PPDBController extends Controller
 			->get();
 
 			$data[$i]->berkas_calon = $fetch_berkas;
+
+			//poin prestasi
+			$fetch_prestasi = DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+			->where('peserta_didik_id','=',$data[$i]->calon_peserta_didik_id)
+			->get();
+
+			if(sizeof($fetch_prestasi) > 0){
+
+				$skor = (
+					(float)$fetch_prestasi[0]->nilai_semester_1 +
+					(float)$fetch_prestasi[0]->nilai_semester_2 +
+					(float)$fetch_prestasi[0]->nilai_semester_3 +
+					(float)$fetch_prestasi[0]->nilai_semester_4 +
+					(float)$fetch_prestasi[0]->nilai_semester_5
+				) / (float)5;
+
+				$fetch_prestasi[0]->skor = $skor;
+
+				$data[$i]->nilai_prestasi = $fetch_prestasi[0];
+			}else{
+				$data[$i]->nilai_prestasi = array();
+			}
 		}
 
         $return['rows'] = $data;
@@ -451,6 +494,26 @@ class PPDBController extends Controller
 		
 		if($level_jalur){
 			$fetch->where('level_jalur','=',$level_jalur);
+		}
+
+		if($sekolah_id){
+			$fetch_sekolah = DB::connection('sqlsrv_2')->table('sekolah')
+			->where('sekolah_id','=',$sekolah_id)
+			->first();
+
+			if($fetch_sekolah){
+				switch ($fetch_sekolah->bentuk_pendidikan_id) {
+					case 5:
+						$fetch->whereNotIn('jalur_id',array('3'));
+						break;
+					case 6:
+						# do nothing
+						break;
+					default:
+						# code...
+						break;
+				}
+			}
 		}
 
 		$return = array();
