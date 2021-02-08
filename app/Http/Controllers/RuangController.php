@@ -720,6 +720,7 @@ class RuangController extends Controller
     static public function getPenggunaRuang(Request $request){
         $ruang_id = $request->input('ruang_id') ? $request->input('ruang_id') : null;
         $pengguna_id = $request->input('pengguna_id') ? $request->input('pengguna_id') : null;
+        $keyword = $request->input('keyword') ? $request->input('keyword') : null;
         $dengan_rows = $request->input('dengan_rows') ? $request->input('dengan_rows') : 'N';
         $start = $request->input('start') ? $request->input('start') : 0;
         $limit = $request->input('limit') ? $request->input('limit') : 20;
@@ -751,10 +752,15 @@ class RuangController extends Controller
         if($pengguna_id){
             $fetch->where('pengguna_ruang.pengguna_id','=',$pengguna_id);
         }
+        
+        if($keyword){
+            $fetch->where('pengguna.nama','ilike',DB::raw("'%".$keyword."%'"));
+        }
 
         // return $fetch->toSql();die;
 
         if($dengan_rows == 'Y'){
+            $count = $fetch->count();
             $fetch->skip($start)->take($limit);
             $fetch = $fetch->get();
             
@@ -764,7 +770,7 @@ class RuangController extends Controller
             // }
             
             $return['rows'] = $fetch;
-            $return['total'] = sizeof($fetch);
+            $return['total'] = $count;
 
         }else{
             $fetch = $fetch->count();
