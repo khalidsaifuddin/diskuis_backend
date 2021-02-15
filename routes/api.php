@@ -113,6 +113,13 @@ Route::prefix('Ruang')->group(function () {
 	Route::post('getRuangDiikuti', 'RuangController@getRuangDiikuti');
 	Route::post('generateRandomString', 'RuangController@generateRandomString');
 	Route::post('hapusRuang', 'RuangController@hapusRuang');
+	Route::post('getKehadiranRuangSiswa', 'RuangController@getKehadiranRuangSiswa');
+	Route::post('simpanKehadiranRuangSiswa', 'RuangController@simpanKehadiranRuangSiswa');
+	Route::post('simpanJabatanRuang', 'RuangController@simpanJabatanRuang');
+	Route::post('getPengaturanRuang', 'RuangController@getPengaturanRuang');
+	Route::post('simpanPengaturanRuang', 'RuangController@simpanPengaturanRuang');
+	Route::post('kehadiranRekapRuangSiswa', 'RuangController@kehadiranRekapRuangSiswa');
+	Route::get('unduhLaporanKehadiranRuangSiswa', 'RuangController@unduhLaporanKehadiranRuangSiswa');
 });
 
 Route::prefix('Poin')->group(function () {
@@ -260,6 +267,10 @@ Route::prefix('PPDB')->group(function () {
 	Route::post('getTingkatPrestasi', 'PPDBController@getTingkatPrestasi');
 	Route::post('simpanNilaiPrestasi', 'PPDBController@simpanNilaiPrestasi');
 	Route::post('getNilaiPrestasi', 'PPDBController@getNilaiPrestasi');
+	Route::get('print/formulir/{id}', 'PPDBController@print_formulir'); // .../print/a7109cd3-8307-4647-9608-2b665df3ba9f
+	Route::get('print/bukti/{id}', 'PPDBController@print_bukti'); // .../print/a7109cd3-8307-4647-9608-2b665df3ba9f
+	Route::post('batalKonfirmasi', 'PPDBController@batalKonfirmasi');
+	Route::post('hapusCalonPesertaDidik', 'PPDBController@hapusCalonPesertaDidik');
 });
 
 Route::middleware('token')->group(function(){

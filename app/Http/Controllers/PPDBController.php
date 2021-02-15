@@ -47,8 +47,10 @@ class PPDBController extends Controller
 		$lintang = $request->lintang ? $request->lintang : null;
 		$bujur = $request->bujur ? $request->bujur : null;
 		$dengan_tk = $request->dengan_tk ? $request->dengan_tk : 'Y';
+		$dengan_smak = $request->dengan_smak ? $request->dengan_smak : 'Y';
 		$untuk_pilihan = $request->untuk_pilihan ? $request->untuk_pilihan : 'N';
 		$peserta_didik_id = $request->peserta_didik_id ? $request->peserta_didik_id : null;
+		$bentuk_pendidikan_id = $request->bentuk_pendidikan_id ? $request->bentuk_pendidikan_id : null;
 		$urutkan = $request->urutkan ? $request->urutkan : 'az';
 
 		$fetch = DB::connection('sqlsrv_2')->table('sekolah')
@@ -83,6 +85,18 @@ class PPDBController extends Controller
 
 		if($dengan_tk !== 'Y'){
 			$fetch->whereIn('sekolah.bentuk_pendidikan_id',array(5,6));
+		}
+		
+		if($dengan_smak !== 'Y'){
+			$fetch->whereIn('sekolah.bentuk_pendidikan_id',array(5,6));
+		}
+
+		if($dengan_tk !== 'Y' && $dengan_smak !== 'Y'){
+			$fetch->whereIn('sekolah.bentuk_pendidikan_id',array(5,6));
+		}
+
+		if($bentuk_pendidikan_id){
+			$fetch->whereIn('sekolah.bentuk_pendidikan_id',array($bentuk_pendidikan_id));
 		}
 
 		if($keyword){
@@ -386,6 +400,7 @@ class PPDBController extends Controller
 		$keyword = $request->keyword ? $request->keyword : null;
         $peserta_didik_id = $request->peserta_didik_id ? $request->peserta_didik_id : null;
         $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
+		$urut_pilihan = $request->urut_pilihan ? $request->urut_pilihan : 99;
         $start = $request->start ? $request->start : 0;
         $limit = $request->limit ? $request->limit : 20;
 
@@ -419,11 +434,15 @@ class PPDBController extends Controller
 		}
 		
 		if($sekolah_id){
-			$fetch->join('ppdb.sekolah_pilihan', function($join) use ($sekolah_id)
+			$fetch->join('ppdb.sekolah_pilihan', function($join) use ($sekolah_id, $urut_pilihan)
 			{
 				$join->on('ppdb.sekolah_pilihan.sekolah_id', '=', DB::raw("'".$sekolah_id."'"));
 				$join->on('ppdb.sekolah_pilihan.peserta_didik_id', '=', 'ppdb.calon_peserta_didik.calon_peserta_didik_id');
 				$join->on('ppdb.sekolah_pilihan.soft_delete', '=', DB::raw("0"));
+				
+				if($urut_pilihan !== 99){
+					$join->on('ppdb.sekolah_pilihan.urut_pilihan', '=', DB::raw($urut_pilihan));
+				}
 			})
 			->join('ref_ppdb.jalur as jalur','jalur.jalur_id','=','ppdb.sekolah_pilihan.jalur_id')
 			->select(
@@ -455,6 +474,7 @@ class PPDBController extends Controller
 			->join('ref_ppdb.tingkat_prestasi as tingkat_prestasi','tingkat_prestasi.tingkat_prestasi_id','=','ppdb.nilai_prestasi.tingkat_prestasi_id')
 			->join('ref_ppdb.jenis_prestasi as jenis_prestasi','jenis_prestasi.jenis_prestasi_id','=','ppdb.nilai_prestasi.jenis_prestasi_id')
 			->where('peserta_didik_id','=',$data[$i]->calon_peserta_didik_id)
+			->where('soft_delete','=',0)
 			->select(
 				'ppdb.nilai_prestasi.*',
 				'tingkat_prestasi.skor',
@@ -614,6 +634,7 @@ class PPDBController extends Controller
 		->join('ref.mst_wilayah as kec','kec.kode_wilayah','=',DB::raw("left(sekolah.kode_wilayah,6)"))
 		->join('ref.mst_wilayah as kab','kab.kode_wilayah','=','kec.mst_kode_wilayah')
 		->join('ref.mst_wilayah as prov','prov.kode_wilayah','=','kab.mst_kode_wilayah')	
+		->join('ref.jalur as jalur','jalur.jalur_id','=','ppdb.sekolah_pilihan.jalur_id')	
 		->leftJoin('ref.bentuk_pendidikan as bp','bp.bentuk_pendidikan_id','=','sekolah.bentuk_pendidikan_id')	
 		->where('ppdb.sekolah_pilihan.soft_delete','=',0)
 		->where('ppdb.sekolah_pilihan.peserta_didik_id','=',$peserta_didik_id)
@@ -623,7 +644,8 @@ class PPDBController extends Controller
 			'kec.nama as kecamatan',
 			'kab.nama as kabupaten',
 			'prov.nama as provinsi',
-			'bp.nama as bentuk'
+			'bp.nama as bentuk',
+			'jalur.nama as jalur'
 		)
 		->orderBy('urut_pilihan','ASC')
 		;
@@ -993,6 +1015,424 @@ class PPDBController extends Controller
 			'rows' => $fetch->get()
 		], 200);
 
+	}
+
+	public function print_formulir($id)
+    {
+    	$calon_pd = DB::connection('sqlsrv_2')->table('ppdb.calon_peserta_didik')->where('calon_peserta_didik_id', $id)
+    		->select(
+    			'ppdb.calon_peserta_didik.*',
+    			'sekolah.nama AS asal_sekolah',
+    			'kec.nama AS kecamatan',
+    			'kab.nama AS kabupaten',
+    			'prop.nama AS provinsi',
+    			'pddk_trkh_ayah.nama AS pendidikan_terakhir_ayah',
+    			'pddk_trkh_ayah.nama AS pendidikan_terakhir_ibu',
+    			'pddk_trkh_ayah.nama AS pendidikan_terakhir_wali',
+    			'work_ayah.nama AS pekerjaan_ayah',
+    			'work_ibu.nama AS pekerjaan_ibu',
+    			'work_wali.nama AS pekerjaan_wali'
+    		)
+    		->leftJoin('sekolah AS sekolah', 'ppdb.calon_peserta_didik.asal_sekolah_id', '=', 'sekolah.sekolah_id')
+    		->join('ref.mst_wilayah AS  kec', 'ppdb.calon_peserta_didik.kode_wilayah_kecamatan', '=', 'kec.kode_wilayah')
+    		->join('ref.mst_wilayah AS  kab', 'ppdb.calon_peserta_didik.kode_wilayah_kabupaten', '=', 'kab.kode_wilayah')
+    		->join('ref.mst_wilayah AS  prop', 'ppdb.calon_peserta_didik.kode_wilayah_provinsi', '=', 'prop.kode_wilayah')
+    		->leftJoin('ref.pendidikan_terakhir AS pddk_trkh_ayah', 'ppdb.calon_peserta_didik.pendidikan_terakhir_id_ayah', '=', 'pddk_trkh_ayah.pendidikan_terakhir_id')
+    		->leftJoin('ref.pendidikan_terakhir AS pddk_trkh_ibu', 'ppdb.calon_peserta_didik.pendidikan_terakhir_id_ibu', '=', 'pddk_trkh_ibu.pendidikan_terakhir_id')
+    		->leftJoin('ref.pendidikan_terakhir AS pddk_trkh_wali', 'ppdb.calon_peserta_didik.pendidikan_terakhir_id_wali', '=', 'pddk_trkh_wali.pendidikan_terakhir_id')
+    		->leftJoin('ref.pekerjaan AS work_ayah', 'ppdb.calon_peserta_didik.pekerjaan_id_ayah', '=', 'work_ayah.pekerjaan_id')
+    		->leftJoin('ref.pekerjaan AS work_ibu', 'ppdb.calon_peserta_didik.pekerjaan_id_ayah', '=', 'work_ibu.pekerjaan_id')
+    		->leftJoin('ref.pekerjaan AS work_wali', 'ppdb.calon_peserta_didik.pekerjaan_id_ayah', '=', 'work_wali.pekerjaan_id')
+    		->first();
+
+    	$sekolah_pilihan = DB::connection('sqlsrv_2')->table('ppdb.sekolah_pilihan')->where('sekolah_pilihan.peserta_didik_id', $id)
+			->leftJoin('sekolah AS sekolah', 'ppdb.sekolah_pilihan.sekolah_id', '=', 'sekolah.sekolah_id')
+			->leftJoin('ref.jalur AS jalur', 'ppdb.sekolah_pilihan.jalur_id', '=', 'jalur.jalur_id')
+			->leftJoin(
+				DB::raw('(
+					SELECT ROW_NUMBER
+					() OVER (
+						PARTITION BY sekolah_pilihan.sekolah_id, sekolah_pilihan.jalur_id
+					ORDER BY
+						sekolah_pilihan.urut_pilihan ASC,
+						sekolah_pilihan.create_date ASC
+					) AS urutan,
+					urut_pilihan,
+					sekolah_pilihan.create_date,
+					sekolah_pilihan.jalur_id,
+					calon_peserta_didik.nama,
+					sekolah_pilihan.sekolah_id,
+					sekolah_pilihan.peserta_didik_id
+				FROM
+					ppdb.sekolah_pilihan
+					JOIN ppdb.calon_peserta_didik ON calon_peserta_didik.calon_peserta_didik_id = sekolah_pilihan.peserta_didik_id 
+				WHERE
+					sekolah_pilihan.soft_delete = 0 
+					AND calon_peserta_didik.soft_delete = 0 
+				ORDER BY
+					sekolah_pilihan.sekolah_id,
+					sekolah_pilihan.jalur_id
+				) as urutan'), function ($join) {
+				$join->on('urutan.sekolah_id', '=', 'ppdb.sekolah_pilihan.sekolah_id');
+				$join->on('urutan.peserta_didik_id','=','ppdb.sekolah_pilihan.peserta_didik_id');
+			})
+			// ->leftJoin('ppdb.kuota_sekolah as kuota', function ($join) {
+			// 	$join->on('kuota.sekolah_id', '=', 'ppdb.sekolah_pilihan.sekolah_id');
+			// 	$join->on('kuota.jalur_id', '=', 'ppdb.sekolah_pilihan.jalur_id');
+			// })
+			->select(
+				'sekolah_pilihan.*',
+				'sekolah.npsn AS npsn',
+				'sekolah.nama AS nama_sekolah',
+				'jalur.nama AS nama_jalur',
+				'urutan.urutan as urutan'
+			)
+			->where('ppdb.sekolah_pilihan.soft_delete', 0)
+			->orderBy('urut_pilihan','ASC')
+			->get();
+		
+		//poin prestasi
+		$fetch_prestasi = DB::connection('sqlsrv_2')->table('ppdb.nilai_prestasi')
+		->join('ref_ppdb.tingkat_prestasi as tingkat_prestasi','tingkat_prestasi.tingkat_prestasi_id','=','ppdb.nilai_prestasi.tingkat_prestasi_id')
+		->join('ref_ppdb.jenis_prestasi as jenis_prestasi','jenis_prestasi.jenis_prestasi_id','=','ppdb.nilai_prestasi.jenis_prestasi_id')
+		->where('peserta_didik_id','=',$id)
+		->where('soft_delete','=',0)
+		->select(
+			'ppdb.nilai_prestasi.*',
+			'tingkat_prestasi.skor',
+			'tingkat_prestasi.nama as tingkat_prestasi',
+			'jenis_prestasi.nama as jenis_prestasi'
+		)
+		->get();
+
+		// return $fetch_prestasi;die;
+
+		// $nilai_prestasi = [];
+
+		if(sizeof($fetch_prestasi) > 0){
+			if((int)$fetch_prestasi[0]->jenis_prestasi_id !== 3){
+
+				// $skor = 0;
+
+			}else{
+
+				$skor = (
+					(float)$fetch_prestasi[0]->nilai_semester_1 +
+					(float)$fetch_prestasi[0]->nilai_semester_2 +
+					(float)$fetch_prestasi[0]->nilai_semester_3 +
+					(float)$fetch_prestasi[0]->nilai_semester_4 +
+					(float)$fetch_prestasi[0]->nilai_semester_5
+				) / (float)5;
+
+				$fetch_prestasi[0]->skor = $skor;
+			
+			}
+
+			$nilai_prestasi = $fetch_prestasi[0];
+		}else{
+			$nilai_prestasi = null;
+		}
+		
+			// return $sekolah_pilihan;die;	
+
+    	if(count($sekolah_pilihan) >= 1){
+			$urutan = @$sekolah_pilihan[0]->urutan;
+
+			// return $urutan;die;
+
+			switch (strlen($urutan)) {
+				case 1: $nol = "000"; break;
+				case 2: $nol = "00"; break;
+				case 3: $nol = "0"; break;
+				case 4: $nol = ""; break;	
+				default:
+					$nol = "";
+					break;
+			}
+
+			$urutan = $nol.$urutan;
+		}else{
+			$urutan = "0000";
+		}
+
+		// return $calon_pd;die;
+
+		$arrBulan = [
+			'Januari',
+			'Februari',
+			'Maret',
+			'April',
+			'Mei',
+			'Juni',
+			'Juli',
+			'Agustus',
+			'September',
+			'Oktober',
+			'November',
+			'Desember'
+		];
+
+    	$templateProcessor = new \PhpOffice\PhpWord\TemplateProcessor('docs/template_formulir_pendaftaran.docx');
+
+    	$orangtua = $calon_pd->orang_tua_utama;
+
+		$templateProcessor->setValue('nik', $calon_pd->nik);
+		$templateProcessor->setValue('no_npsn1', substr(@$sekolah_pilihan[0]->npsn,0,1));
+		$templateProcessor->setValue('no_npsn2', substr(@$sekolah_pilihan[0]->npsn,1,1));
+		$templateProcessor->setValue('no_npsn3', substr(@$sekolah_pilihan[0]->npsn,2,1));
+		$templateProcessor->setValue('no_npsn4', substr(@$sekolah_pilihan[0]->npsn,3,1));
+		$templateProcessor->setValue('no_npsn5', substr(@$sekolah_pilihan[0]->npsn,4,1));
+		$templateProcessor->setValue('no_npsn6', substr(@$sekolah_pilihan[0]->npsn,5,1));
+		$templateProcessor->setValue('no_npsn7', substr(@$sekolah_pilihan[0]->npsn,6,1));
+		$templateProcessor->setValue('no_npsn8', substr(@$sekolah_pilihan[0]->npsn,7,1));
+		$templateProcessor->setValue('no_jalur1', substr(@$sekolah_pilihan[0]->jalur_id,0,1));
+		$templateProcessor->setValue('no_jalur2', substr(@$sekolah_pilihan[0]->jalur_id,1,1));
+		$templateProcessor->setValue('no_jalur3', substr(@$sekolah_pilihan[0]->jalur_id,2,1));
+		$templateProcessor->setValue('no_jalur4', substr(@$sekolah_pilihan[0]->jalur_id,3,1));
+		$templateProcessor->setValue('no1', substr($urutan, 0, 1));
+		$templateProcessor->setValue('no2', substr($urutan, 1, 1));
+		$templateProcessor->setValue('no3', substr($urutan, 2, 1));
+		$templateProcessor->setValue('no4', substr($urutan, 3, 1));
+		$templateProcessor->setValue('nama', $calon_pd->nama);
+		$templateProcessor->setValue('jenis_kelamin', $calon_pd->jenis_kelamin == 'L' ? 'Laki - laki' : 'Perempuan');
+		$templateProcessor->setValue('tempat_lahir', $calon_pd->tempat_lahir);
+		$templateProcessor->setValue('tgllhrd', date("d", strtotime($calon_pd->tanggal_lahir)));
+		$templateProcessor->setValue('tgllhrm', date("m", strtotime($calon_pd->tanggal_lahir)));
+		$templateProcessor->setValue('tgllhry', date("Y", strtotime($calon_pd->tanggal_lahir)));
+		$templateProcessor->setValue('asal_sekolah', $calon_pd->asal_sekolah);
+		$templateProcessor->setValue('alamat_jalan', $calon_pd->alamat_tempat_tinggal);
+		$templateProcessor->setValue('rt', $calon_pd->rt);
+		$templateProcessor->setValue('rw', $calon_pd->rw);
+		$templateProcessor->setValue('desa', '');
+		$templateProcessor->setValue('dusun', $calon_pd->dusun);
+		$templateProcessor->setValue('desa', $calon_pd->desa_kelurahan);
+		$templateProcessor->setValue('kecamatan', $calon_pd->kecamatan);
+		$templateProcessor->setValue('kabupaten', $calon_pd->kabupaten);
+		$templateProcessor->setValue('provinsi', $calon_pd->provinsi);
+		$templateProcessor->setValue('lintang', $calon_pd->lintang);
+		$templateProcessor->setValue('bujur', $calon_pd->bujur);
+		$templateProcessor->setValue('jalur', @$sekolah_pilihan[0]->nama_jalur);
+		$templateProcessor->setValue('npsn1', @$sekolah_pilihan[0]->npsn);
+		$templateProcessor->setValue('sekolah1', @$sekolah_pilihan[0]->nama_sekolah);
+		$templateProcessor->setValue('npsn2', @$sekolah_pilihan[1]->npsn);
+		$templateProcessor->setValue('sekolah2', @$sekolah_pilihan[1]->nama_sekolah);
+		$templateProcessor->setValue('npsn3', @$sekolah_pilihan[2]->npsn);
+		$templateProcessor->setValue('sekolah3', @$sekolah_pilihan[2]->nama_sekolah);
+		$templateProcessor->setValue('npsn4', @$sekolah_pilihan[3]->npsn);
+		$templateProcessor->setValue('sekolah4', @$sekolah_pilihan[3]->nama_sekolah);
+		$templateProcessor->setValue('orang_tua_utama', $calon_pd->{'nama_'.$orangtua});
+		$templateProcessor->setValue('orang_tua_tempat_lahir', $calon_pd->tempat_lahir_ayah);
+		$templateProcessor->setValue('orttd', date("d", strtotime( $calon_pd->{'tanggal_lahir_'.$orangtua} )));
+		$templateProcessor->setValue('orttm', date("m", strtotime( $calon_pd->{'tanggal_lahir_'.$orangtua} )));
+		$templateProcessor->setValue('ortty', date("Y", strtotime( $calon_pd->{'tanggal_lahir_'.$orangtua} )));
+		$templateProcessor->setValue('orang_tua_pendidikan', $calon_pd->{'pendidikan_terakhir_'.$orangtua});
+		$templateProcessor->setValue('orang_tua_pekerjaan', $calon_pd->{'pekerjaan_'.$orangtua});
+		$templateProcessor->setValue('orang_tua_alamat_tempat_tinggal', $calon_pd->{'alamat_tempat_tinggal_'.$orangtua});
+		$templateProcessor->setValue('orang_tua_no_telepon', $calon_pd->{'no_telepon_'.$orangtua});
+		$templateProcessor->setValue('skor', @$sekolah_pilihan[0]->jalur_id === '0300' ? ($nilai_prestasi ? $nilai_prestasi->skor : 0) : null);
+		$templateProcessor->setValue('tingkat_prestasi', @$sekolah_pilihan[0]->jalur_id === '0300' ? ($nilai_prestasi ? ($nilai_prestasi->jenis_prestasi . "" .($nilai_prestasi->jenis_prestasi_id !== 3 ? " (".$nilai_prestasi->tingkat_prestasi.")" : "")) : null) : null);
+		$templateProcessor->setValue('datenow', date("d") . " " . $arrBulan[(int)date("m")-1] . " " . date("Y"));
+
+		header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment;filename="Formulir_PPDB_'.date("Y").'-'.$calon_pd->nik.'.docx"');
+        $templateProcessor->saveAs('php://output');
+
+    }
+
+    public function print_bukti($id)
+    {
+    	$calon_pd = DB::connection('sqlsrv_2')->table('ppdb.calon_peserta_didik')->where('calon_peserta_didik_id', $id)
+    		->select(
+    			'calon_peserta_didik.*',
+    			'sekolah.nama AS asal_sekolah'
+    		)
+    		->leftJoin('sekolah AS sekolah', 'ppdb.calon_peserta_didik.asal_sekolah_id', '=', 'sekolah.sekolah_id')
+    		->first();
+
+    	$sekolah_pilihan = DB::connection('sqlsrv_2')->table('ppdb.sekolah_pilihan')->where('sekolah_pilihan.peserta_didik_id', $id)
+			->leftJoin('sekolah AS sekolah', 'ppdb.sekolah_pilihan.sekolah_id', '=', 'sekolah.sekolah_id')
+			->leftJoin('ref.jalur AS jalur', 'ppdb.sekolah_pilihan.jalur_id', '=', 'jalur.jalur_id')
+			// ->leftJoin(
+			// 	DB::raw('(
+			// 		SELECT ROW_NUMBER
+			// 		() OVER (
+			// 			PARTITION BY sekolah_pilihan.sekolah_id, sekolah_pilihan.jalur_id
+			// 		ORDER BY
+			// 			sekolah_pilihan.urut_pilihan ASC,
+			// 			COALESCE ( konf.status, 0 ) DESC,
+			// 			konf.last_update ASC,	
+			// 			sekolah_pilihan.create_date ASC
+			// 		) AS urutan,
+			// 		urut_pilihan,
+			// 		COALESCE ( konf.status, 0 ) AS konfirmasi,
+			// 		konf.last_update,
+			// 		sekolah_pilihan.create_date,
+			// 		sekolah_pilihan.jalur_id,
+			// 		calon_peserta_didik.nama,
+			// 		sekolah_pilihan.sekolah_id,
+			// 		sekolah_pilihan.peserta_didik_id
+			// 	FROM
+			// 		ppdb.sekolah_pilihan
+			// 		LEFT JOIN ppdb.konfirmasi_pendaftaran konf ON konf.calon_peserta_didik_id = sekolah_pilihan.peserta_didik_id
+			// 		JOIN ppdb.calon_peserta_didik ON calon_peserta_didik.calon_peserta_didik_id = sekolah_pilihan.peserta_didik_id 
+			// 	WHERE
+			// 		sekolah_pilihan.soft_delete = 0 
+			// 		AND calon_peserta_didik.soft_delete = 0 
+			// 	-- ORDER BY
+			// 	-- 	sekolah_pilihan.urut_pilihan ASC,
+			// 	-- 	COALESCE ( konf.status, 0 ) DESC,
+			// 	-- 	konf.last_update ASC,
+			// 	-- 	sekolah_pilihan.create_date ASC
+			// 	ORDER BY
+			// 		sekolah_pilihan.sekolah_id,
+			// 		sekolah_pilihan.jalur_id
+			// 	) as urutan'), function ($join) {
+			// 	$join->on('urutan.sekolah_id', '=', 'ppdb.sekolah_pilihan.sekolah_id');
+			// 	$join->on('urutan.peserta_didik_id','=','ppdb.sekolah_pilihan.peserta_didik_id');
+			// })
+			// ->leftJoin('ppdb.kuota_sekolah as kuota','kuota.sekolah_id','=','ppdb.sekolah_pilihan.sekolah_id')
+			->select(
+				'sekolah_pilihan.*',
+				'sekolah.npsn AS npsn',
+				'sekolah.nama AS nama_sekolah',
+				'jalur.nama AS nama_jalur',
+				'sekolah_pilihan.urut_pilihan as urutan'
+			)
+			->where('ppdb.sekolah_pilihan.soft_delete', 0)
+			->orderBy('urut_pilihan','ASC')
+			->get();
+
+		if(count($sekolah_pilihan) >= 1){
+			$urutan = @$sekolah_pilihan[0]->urutan;
+
+			switch (strlen($urutan)) {
+				case 1: $nol = "000"; break;
+				case 2: $nol = "00"; break;
+				case 3: $nol = "0"; break;
+				case 4: $nol = ""; break;	
+				default:
+					$nol = "";
+					break;
+			}
+
+			$urutan = $nol.$urutan;
+		}else{
+			$urutan = "0000";
+		}
+
+		$arrBulan = [
+			'Januari',
+			'Februari',
+			'Maret',
+			'April',
+			'Mei',
+			'Juni',
+			'Juli',
+			'Agustus',
+			'September',
+			'Oktober',
+			'November',
+			'Desember'
+		];
+
+		$berkas = DB::connection('sqlsrv_2')->table('ppdb.berkas_calon')
+		->where('calon_peserta_didik_id','=',$calon_pd->calon_peserta_didik_id)
+		->where('soft_delete','=',0)
+		->where('jenis_berkas_id','=',8)
+		->first();
+
+
+		$templateProcessor = new \PhpOffice\PhpWord\TemplateProcessor('docs/template_bukti_pendaftaran.docx');
+
+		$templateProcessor->setValue('no_npsn1', substr(@$sekolah_pilihan[0]->npsn,0,1));
+		$templateProcessor->setValue('no_npsn2', substr(@$sekolah_pilihan[0]->npsn,1,1));
+		$templateProcessor->setValue('no_npsn3', substr(@$sekolah_pilihan[0]->npsn,2,1));
+		$templateProcessor->setValue('no_npsn4', substr(@$sekolah_pilihan[0]->npsn,3,1));
+		$templateProcessor->setValue('no_npsn5', substr(@$sekolah_pilihan[0]->npsn,4,1));
+		$templateProcessor->setValue('no_npsn6', substr(@$sekolah_pilihan[0]->npsn,5,1));
+		$templateProcessor->setValue('no_npsn7', substr(@$sekolah_pilihan[0]->npsn,6,1));
+		$templateProcessor->setValue('no_npsn8', substr(@$sekolah_pilihan[0]->npsn,7,1));
+		$templateProcessor->setValue('no_jalur1', substr(@$sekolah_pilihan[0]->jalur_id,0,1));
+		$templateProcessor->setValue('no_jalur2', substr(@$sekolah_pilihan[0]->jalur_id,1,1));
+		$templateProcessor->setValue('no_jalur3', substr(@$sekolah_pilihan[0]->jalur_id,2,1));
+		$templateProcessor->setValue('no_jalur4', substr(@$sekolah_pilihan[0]->jalur_id,3,1));
+        $templateProcessor->setValue('no1', substr($urutan, 0, 1));
+		$templateProcessor->setValue('no2', substr($urutan, 1, 1));
+		$templateProcessor->setValue('no3', substr($urutan, 2, 1));
+		$templateProcessor->setValue('no4', substr($urutan, 3, 1));
+		$templateProcessor->setValue('nik', $calon_pd->nik);
+		$templateProcessor->setValue('nama', $calon_pd->nama);
+		$templateProcessor->setValue('nisn', $calon_pd->nisn);
+		$templateProcessor->setValue('tempat_lahir', $calon_pd->tempat_lahir);
+		$templateProcessor->setValue('alamat_jalan', $calon_pd->alamat_tempat_tinggal);
+		$templateProcessor->setValue('tgllhr_d', date("d", strtotime($calon_pd->tanggal_lahir)));
+		$templateProcessor->setValue('tgllhr_m', date("m", strtotime($calon_pd->tanggal_lahir)));
+		$templateProcessor->setValue('tgllhr_y', date("Y", strtotime($calon_pd->tanggal_lahir)));
+		$templateProcessor->setValue('lintang', $calon_pd->lintang);
+		$templateProcessor->setValue('bujur', $calon_pd->bujur);
+		$templateProcessor->setValue('asal_sekolah', $calon_pd->asal_sekolah);
+		$templateProcessor->setValue('jalur', @$sekolah_pilihan[0]->nama_jalur);
+		$templateProcessor->setValue('npsn1', @$sekolah_pilihan[0]->npsn);
+		$templateProcessor->setValue('sekolah1', @$sekolah_pilihan[0]->nama_sekolah);
+		$templateProcessor->setValue('npsn2', @$sekolah_pilihan[1]->npsn);
+		$templateProcessor->setValue('sekolah2', @$sekolah_pilihan[1]->nama_sekolah);
+		$templateProcessor->setValue('npsn3', @$sekolah_pilihan[2]->npsn);
+		$templateProcessor->setValue('sekolah3', @$sekolah_pilihan[2]->nama_sekolah);
+		$templateProcessor->setValue('npsn4', @$sekolah_pilihan[3]->npsn);
+		$templateProcessor->setValue('sekolah4', @$sekolah_pilihan[3]->nama_sekolah);
+		$templateProcessor->setValue('datenow', date("d") . " " . $arrBulan[(int)date("m")-1] . " " . date("Y"));
+        $templateProcessor->setImageValue('codeQR', array('path' => "https://api.qrserver.com/v1/create-qr-code/?size=60x60&data={$calon_pd->nik}", 'width' => '1in', 'height' => '1in'));
+        $templateProcessor->setImageValue('pas_foto', array('path' => "https://be.diskuis.id".$berkas->nama_file, 'width' => '1in', 'height' => '2in'));
+
+
+        // $templateProcessor->deleteBlock('DELETEME');
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment;filename="Bukti_PPDB_'.date("Y").'-'.$calon_pd->nik.'.docx"');
+        $templateProcessor->saveAs('php://output');
+	}
+
+	public function batalKonfirmasi(Request $request){
+		$calon_peserta_didik_id = $request->calon_peserta_didik_id ? $request->calon_peserta_didik_id : null;
+
+		$exe = DB::connection('sqlsrv_2')->table('ppdb.calon_peserta_didik')
+		->where('calon_peserta_didik_id','=',$calon_peserta_didik_id)
+		->update([
+			'status_konfirmasi_id' => null,
+			'last_update' => DB::raw("now()")
+		]);
+
+		return response([ 
+			'sukses' => $exe ? true : false, 
+			'rows' => DB::connection('sqlsrv_2')->table('ppdb.calon_peserta_didik')
+			->where('calon_peserta_didik_id','=',$calon_peserta_didik_id)->get()
+		], 200);
+	}
+	
+	public function hapusCalonPesertaDidik(Request $request){
+		$calon_peserta_didik_id = $request->calon_peserta_didik_id ? $request->calon_peserta_didik_id : null;
+
+		$exe = DB::connection('sqlsrv_2')->table('ppdb.calon_peserta_didik')
+		->where('calon_peserta_didik_id','=',$calon_peserta_didik_id)
+		->update([
+			'soft_delete' => 1,
+			'last_update' => DB::raw("now()")
+		]);
+
+		if($exe){
+			$exe_pilihan = DB::connection('sqlsrv_2')->table('ppdb.sekolah_pilihan')
+			->where('peserta_didik_id','=',$calon_peserta_didik_id)
+			->update([
+				'soft_delete' => 1,
+				'last_update' => DB::raw("now()")
+			]);
+		}
+
+		return response([ 
+			'sukses' => $exe ? true : false, 
+			'sukses_pilihan' => $exe_pilihan ? true : false, 
+			'rows' => DB::connection('sqlsrv_2')->table('ppdb.calon_peserta_didik')
+			->where('calon_peserta_didik_id','=',$calon_peserta_didik_id)->get()
+		], 200);
 	}
 
 }

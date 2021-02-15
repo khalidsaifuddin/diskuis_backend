@@ -552,6 +552,8 @@ class RuangController extends Controller
         $ext = $file->getClientOriginalExtension();
         $name = $file->getClientOriginalName();
 
+        // return $ext;die;
+
         // $uuid = DB::connection('sqlsrv_2')->select(DB::raw("select uuid_generate_v4() as uui from ruang limit 1"));
 
         $destinationPath = base_path('/public/assets/berkas');
@@ -778,5 +780,339 @@ class RuangController extends Controller
         }
 
         return $return;
+    }
+
+    static function getKehadiranRuangSiswa(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+        $tanggal = $request->tanggal ? $request->tanggal : null;
+        $limit = $request->limit ? $request->limit : 20;
+        $start = $request->start ? $request->start : 0;
+
+        $fetch = DB::connection('sqlsrv_2')
+        ->table('kehadiran_ruang_siswa')
+        ->where('soft_delete','=',0)
+        ->select(
+            'kehadiran_ruang_siswa.*'
+        )
+        ;
+
+        if($pengguna_id){
+            $fetch->where('kehadiran_ruang_siswa.pengguna_id','=',$pengguna_id);
+        }
+        
+        if($ruang_id){
+            $fetch->where('kehadiran_ruang_siswa.ruang_id','=',$ruang_id);
+        }
+        
+        if($tanggal){
+            $fetch->where('kehadiran_ruang_siswa.tanggal','=',$tanggal);
+        }
+
+        return response(
+            [
+                'total' => $fetch->count(),
+                'rows' => $fetch->skip($start)->take($limit)->get()
+            ],
+            200
+        );
+    }
+
+    static function simpanKehadiranRuangSiswa(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+        $tanggal = $request->tanggal ? $request->tanggal : null;
+        $kehadiran_ruang_siswa_id = $request->kehadiran_ruang_siswa_id ? $request->kehadiran_ruang_siswa_id : RuangController::generateUUID();
+
+        $fetch_cek = DB::connection('sqlsrv_2')->table('kehadiran_ruang_siswa')
+        ->where('soft_delete','=',0)
+        ->where('kehadiran_ruang_siswa.ruang_id','=',$ruang_id)
+        ->where('kehadiran_ruang_siswa.pengguna_id','=',$pengguna_id)
+        ->where('kehadiran_ruang_siswa.tanggal','=',$tanggal)
+        ->get()
+        ;
+
+        if(sizeof($fetch_cek) > 0){
+            //sudah ada recordnya
+            $exe = DB::connection('sqlsrv_2')->table('kehadiran_ruang_siswa')
+            ->where('soft_delete','=',0)
+            ->where('kehadiran_ruang_siswa.ruang_id','=',$ruang_id)
+            ->where('kehadiran_ruang_siswa.pengguna_id','=',$pengguna_id)
+            ->where('kehadiran_ruang_siswa.tanggal','=',$tanggal)
+            ->update([
+                'ruang_id' => $ruang_id,
+                'pengguna_id' => $pengguna_id,
+                'media_input_kehadiran_id' => $request->media_input_kehadiran_id,
+                'tanggal' => $request->tanggal,
+                'lintang' => $request->lintang,
+                'bujur' => $request->bujur,
+                'keterangan' => $request->keterangan,
+                'jenis_kehadiran_id' => $request->jenis_kehadiran_id,
+                'waktu_datang' => $request->waktu_datang,
+                'waktu_pulang' => $request->waktu_pulang,
+                'last_update' => DB::raw('now()::timestamp(0)')
+            ]);
+
+        }else{
+            //belum ada recordnya
+            $exe = DB::connection('sqlsrv_2')->table('kehadiran_ruang_siswa')
+            ->insert([
+                'kehadiran_ruang_siswa_id' => $kehadiran_ruang_siswa_id,
+                'ruang_id' => $ruang_id,
+                'pengguna_id' => $pengguna_id,
+                'media_input_kehadiran_id' => $request->media_input_kehadiran_id,
+                'tanggal' => $request->tanggal,
+                'lintang' => $request->lintang,
+                'bujur' => $request->bujur,
+                'keterangan' => $request->keterangan,
+                'jenis_kehadiran_id' => $request->jenis_kehadiran_id,
+                'waktu_datang' => $request->waktu_datang,
+                'waktu_pulang' => $request->waktu_pulang,
+                'create_date' => DB::raw('now()::timestamp(0)'),
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => 0
+            ]);
+        }
+
+        return response(
+            [
+                'sukses' => ($exe ? true : false),
+                'rows' => DB::connection('sqlsrv_2')->table('kehadiran_ruang_siswa')
+                ->where('kehadiran_ruang_siswa.ruang_id','=',$ruang_id)
+                ->where('kehadiran_ruang_siswa.pengguna_id','=',$pengguna_id)
+                ->where('kehadiran_ruang_siswa.tanggal','=',$tanggal)
+                ->get()
+            ],
+            200
+        );
+    }
+
+    public function simpanJabatanRuang(Request $request){
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+        $jabatan_ruang_id = $request->jabatan_ruang_id ? $request->jabatan_ruang_id : null;
+
+        try {
+            //code...
+            $exe = DB::connection('sqlsrv_2')->table('pengguna_ruang')
+            ->where('ruang_id','=',$ruang_id)
+            ->where('pengguna_id','=',$pengguna_id)
+            ->update([
+                'jabatan_ruang_id' => $jabatan_ruang_id,
+                'soft_delete' => 0,
+                'last_update' => DB::raw("now()")
+            ])
+            ;
+
+        } catch (\Throwable $th) {
+            //throw $th;
+            $exe = false;
+        }
+
+        return response(
+            [
+                'sukses' => ($exe ? true : false),
+                'rows' => DB::connection('sqlsrv_2')->table('pengguna_ruang')
+                ->where('ruang_id','=',$ruang_id)
+                ->where('pengguna_id','=',$pengguna_id)
+                ->where('soft_delete','=',0)
+                ->get()
+            ],
+            200
+        );
+
+        
+    }
+
+    static function getPengaturanRuang(Request $request){
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+        $limit = $request->limit ? $request->limit : 20;
+        $start = $request->start ? $request->start : 0;
+
+        $fetch = DB::connection('sqlsrv_2')->table('pengaturan_ruang')
+        ->where('pengaturan_ruang.ruang_id','=',$ruang_id)
+        ->where('pengaturan_ruang.soft_delete','=',0)
+        ;
+
+        return response(
+            [
+                'total' => $fetch->count(),
+                'rows' => $fetch->skip($start)->take($limit)->get()
+            ],
+            200
+        );
+    }
+
+    static function simpanPengaturanRuang(Request $request){
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+        $pengaturan_ruang_id = $request->pengaturan_ruang_id ? $request->pengaturan_ruang_id : RuangController::generateUUID();
+
+        $fetch_cek = DB::connection('sqlsrv_2')->table('pengaturan_ruang')
+        ->where('pengaturan_ruang.ruang_id','=',$ruang_id)
+        ->where('pengaturan_ruang.soft_delete','=',0)
+        ->get();
+
+        if(sizeof($fetch_cek) > 0){
+            //siudah ada
+            $exe = DB::connection('sqlsrv_2')->table('pengaturan_ruang')
+            ->where('pengaturan_ruang.ruang_id','=',$ruang_id)
+            ->where('pengaturan_ruang.soft_delete','=',0)
+            ->update([
+                'sabtu_masuk_sekolah' => $request->sabtu_masuk_sekolah ? $request->sabtu_masuk_sekolah : '0',
+                'masuk_01' => $request->masuk_01,
+                'masuk_02' => $request->masuk_02,
+                'masuk_03' => $request->masuk_03,
+                'masuk_04' => $request->masuk_04,
+                'masuk_05' => $request->masuk_05,
+                'masuk_06' => $request->masuk_06,
+                'masuk_07' => $request->masuk_07,
+                'jam_masuk' => $request->jam_masuk,
+                'jam_pulang' => $request->jam_pulang,
+                'radius_absen_aktif' => $request->radius_absen_aktif,
+                'radius_absen_sekolah_guru' => $request->radius_absen_sekolah_guru,
+                'radius_absen_sekolah_siswa' => $request->radius_absen_sekolah_siswa,
+                'lintang' => $request->lintang,
+                'bujur' => $request->bujur,
+                'last_update' => DB::raw('now()::timestamp(0)'),
+            ]);
+
+        }else{
+            
+            //belum ada
+            $exe = DB::connection('sqlsrv_2')->table('pengaturan_ruang')
+            ->insert([
+                'pengaturan_ruang_id' => $pengaturan_ruang_id,
+                'ruang_id' => $ruang_id,
+                'sabtu_masuk_sekolah' => $request->sabtu_masuk_sekolah ? $request->sabtu_masuk_sekolah : '0',
+                'masuk_01' => $request->masuk_01,
+                'masuk_02' => $request->masuk_02,
+                'masuk_03' => $request->masuk_03,
+                'masuk_04' => $request->masuk_04,
+                'masuk_05' => $request->masuk_05,
+                'masuk_06' => $request->masuk_06,
+                'masuk_07' => $request->masuk_07,
+                'jam_masuk' => $request->jam_masuk,
+                'jam_pulang' => $request->jam_pulang,
+                'radius_absen_aktif' => $request->radius_absen_aktif,
+                'radius_absen_sekolah_guru' => $request->radius_absen_sekolah_guru,
+                'radius_absen_sekolah_siswa' => $request->radius_absen_sekolah_siswa,
+                'lintang' => $request->lintang,
+                'bujur' => $request->bujur,
+                'create_date' => DB::raw('now()::timestamp(0)'),
+                'last_update' => DB::raw('now()::timestamp(0)'),
+                'soft_delete' => '0',    
+            ]);
+        }
+
+        return response(
+            [
+                'sukses' => ($exe ? true : false),
+                'rows' => DB::connection('sqlsrv_2')->table('pengaturan_ruang')
+                ->where('pengaturan_ruang.ruang_id','=',$ruang_id)
+                ->where('pengaturan_ruang.soft_delete','=',0)
+                ->get()
+            ],
+            200
+        );
+    }
+
+    static function kehadiranRekapRuangSiswa(Request $request){
+        $tanggal_terakhir = $request->tanggal_terakhir ? $request->tanggal_terakhir : 30;
+        $bulan = $request->bulan ? $request->bulan : 1;
+        $tahun = $request->tahun ? $request->tahun : 2020;
+        $ruang_id = $request->ruang_id ? $request->ruang_id : null;
+
+        $sql = "SELECT
+            extract(dow from  bulans.tanggal_bulan)+1 as urut_hari,
+            bulans.*,
+	        hadir.*
+        FROM
+            ( SELECT d :: DATE AS tanggal_bulan FROM generate_series ( '".$tahun."-".$bulan."-1', '".$tahun."-".$bulan."-".$tanggal_terakhir."', '1 day' :: INTERVAL ) d ) bulans
+            LEFT JOIN (
+                SELECT
+                    kehadiran_ruang_siswa.ruang_id,
+                    kehadiran_ruang_siswa.tanggal,
+                    SUM ( 1 ) AS total,
+                    MAX ( gurus.total_guru ) AS total_guru,
+                    (
+                        SUM ( 1 ) / CAST(SUM ( gurus.total_guru ) as float) * 100
+                    ) as persen
+                FROM
+                    kehadiran_ruang_siswa
+                    LEFT JOIN (
+                    SELECT
+                        pengguna_ruang.ruang_id,
+                        SUM ( 1 ) AS total_guru 
+                    FROM
+                        pengguna_ruang 
+                    WHERE
+                        pengguna_ruang.jabatan_ruang_id = 3 
+                        AND pengguna_ruang.soft_delete = 0 
+                        AND pengguna_ruang.ruang_id = '".$ruang_id."' 
+                    GROUP BY
+                        pengguna_ruang.ruang_id 
+                    ) gurus ON gurus.ruang_id = kehadiran_ruang_siswa.ruang_id 
+                WHERE
+                    kehadiran_ruang_siswa.soft_delete = 0 
+                    AND kehadiran_ruang_siswa.ruang_id = '".$ruang_id."' 
+                GROUP BY
+                    kehadiran_ruang_siswa.ruang_id,
+                    kehadiran_ruang_siswa.tanggal
+            ) hadir on hadir.tanggal = bulans.tanggal_bulan
+            ";
+
+        return DB::connection('sqlsrv_2')->select(DB::raw($sql));
+    }
+    
+    public function unduhLaporanKehadiranRuangSiswa(Request $request){
+        // return "oke";
+
+        $arrHari = json_decode($request->hari_terpilih);
+
+        $str_kolom = '';
+
+        for ($iHari=0; $iHari < sizeof($arrHari); $iHari++) { 
+            $str_kolom .= ",sum(case when tanggal = '".$arrHari[$iHari]."' then 1 else 0 end) as masuk_".str_replace("-","",$arrHari[$iHari]);
+        }
+
+        $fetch_pengguna_ruang = DB::connection('sqlsrv_2')->table('pengguna_ruang')
+        ->join('pengguna','pengguna.pengguna_id','=','pengguna_ruang.pengguna_id')
+        ->leftJoin(DB::raw("(SELECT
+            pengguna_id,
+            ruang_id
+            ".$str_kolom."
+        FROM
+            kehadiran_ruang_siswa 
+        WHERE
+            soft_delete = 0 
+            AND ruang_id = '".$request->ruang_id."'
+            group by pengguna_id, ruang_id) as kehadiran"), 'kehadiran.pengguna_id','=','pengguna_ruang.pengguna_id')
+        ->where('pengguna_ruang.soft_delete','=',0)
+        ->where('pengguna_ruang.ruang_id','=',$request->ruang_id)
+        ->where('pengguna_ruang.jabatan_ruang_id','=',3)
+        ->orderBy('pengguna_ruang.no_absen','ASC')
+        ->orderBy('pengguna.nama','ASC')
+        ->select(
+            'pengguna_ruang.*',
+            'pengguna.nama',
+            'kehadiran.*'
+        )
+        ->get()
+        ;
+
+        $fetch_ruang = DB::connection('sqlsrv_2')->table('ruang')->where('ruang_id','=',$request->ruang_id)->first();
+
+        // return $fetch_pengguna_ruang;die;
+
+        // return $request->hari_terpilih;
+        // $fetch = [];
+
+        return view('excel/TemplateRekapAbsen', [
+            'return' => $fetch_pengguna_ruang, 
+            'ruang_id' => $request->ruang_id, 
+            'nama_ruang' => $fetch_ruang->nama,
+            'hari_terpilih' => $request->hari_terpilih
+        ]);
+
     }
 }

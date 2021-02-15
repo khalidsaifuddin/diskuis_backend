@@ -38,6 +38,7 @@ class Cors
             "http://117.53.47.43:8060",
             "http://ppdblumajang.diskuis.id",
             "https://ppdblumajang.diskuis.id",
+            "http://dindiklumajang.site:8060",
             "file://",
             // "http://gamemaster.diskuis.id/",
             null
