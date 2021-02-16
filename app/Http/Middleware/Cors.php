@@ -39,6 +39,10 @@ class Cors
             "http://ppdblumajang.diskuis.id",
             "https://ppdblumajang.diskuis.id",
             "http://dindiklumajang.site:8060",
+            "http://ppdblumajang-dinas.diskuis.id",
+            "https://ppdblumajang-dinas.diskuis.id",
+            "http://cek-ppdblumajang.diskuis.id",
+            "https://cek-ppdblumajang.diskuis.id",
             "file://",
             // "http://gamemaster.diskuis.id/",
             null

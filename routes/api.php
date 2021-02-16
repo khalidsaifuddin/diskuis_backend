@@ -271,6 +271,8 @@ Route::prefix('PPDB')->group(function () {
 	Route::get('print/bukti/{id}', 'PPDBController@print_bukti'); // .../print/a7109cd3-8307-4647-9608-2b665df3ba9f
 	Route::post('batalKonfirmasi', 'PPDBController@batalKonfirmasi');
 	Route::post('hapusCalonPesertaDidik', 'PPDBController@hapusCalonPesertaDidik');
+	Route::post('getStatistikDinas', 'PPDBController@getStatistikDinas');
+	Route::post('simpanJadwal', 'PPDBController@simpanJadwal');
 });
 
 Route::middleware('token')->group(function(){
