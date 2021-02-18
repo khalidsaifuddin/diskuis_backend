@@ -245,6 +245,7 @@ Route::prefix('app')->group(function () {
 	Route::post('getRekapBulanan', 'AppController@getRekapBulanan');
 	Route::post('getRekapKumulatif', 'AppController@getRekapKumulatif');
 	Route::post('getRekapBulananKumulatif', 'AppController@getRekapBulananKumulatif');
+	Route::post('getVersi', 'AppController@getVersi');
 });
 
 Route::prefix('PPDB')->group(function () {

@@ -575,15 +575,23 @@ class PPDBController extends Controller
 		$limit = $request->limit ? $request->limit : 20;
 
 		$fetch = DB::connection('sqlsrv_2')->table('ref_ppdb.jalur')
-		->whereNull('expired_date')
+		->join('ppdb.jadwal as jadwal', 'jadwal.jalur_id', '=', 'ref_ppdb.jalur.jalur_id')
+		->whereNull('ref_ppdb.jalur.expired_date')
+		->where('jadwal.soft_delete','=',0)
+		->where('jadwal.waktu_mulai','<=', DB::raw("now()"))
+		->where('jadwal.waktu_selesai','>=', DB::raw("now()"))
+		->select(
+			'ref_ppdb.jalur.*',
+			'jadwal.*'
+		)
 		;
 
 		if($jalur_id){
-			$fetch->where('jalur_id','=',$jalur_id);
+			$fetch->where('ref_ppdb.jalur.jalur_id','=',$jalur_id);
 		}
 		
 		if($level_jalur){
-			$fetch->where('level_jalur','=',$level_jalur);
+			$fetch->where('ref_ppdb.jalur.level_jalur','=',$level_jalur);
 		}
 
 		if($sekolah_id){
@@ -594,7 +602,7 @@ class PPDBController extends Controller
 			if($fetch_sekolah){
 				switch ($fetch_sekolah->bentuk_pendidikan_id) {
 					case 5:
-						$fetch->whereNotIn('jalur_id',array('0300'));
+						$fetch->whereNotIn('ref_ppdb.jalur.jalur_id',array('0300'));
 						break;
 					case 6:
 						# do nothing

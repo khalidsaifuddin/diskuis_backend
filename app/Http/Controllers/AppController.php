@@ -13,6 +13,17 @@ class AppController extends Controller
     	# code...
 	}
 
+	public function getVersi(Request $request){
+		try {
+			$fetch = DB::connection('sqlsrv_2')->table('versi')->where('jenis_versi','=','versi_app')->first()->versi_int;
+		} catch (\Throwable $th) {
+			//throw $th;
+			$fetch = 30303;
+		}
+
+		return $fetch;
+	}
+
 	static function getRekapKumulatif(Request $request){
 		// return "oke";
 		$interval = $request->interval ? $request->interval : 10;
