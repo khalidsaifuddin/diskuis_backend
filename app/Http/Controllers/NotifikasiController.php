@@ -61,6 +61,7 @@ class NotifikasiController extends Controller
         switch ($tipe) {
             case 'semua':
                 //nggak ngapa2in
+                $fetch->orderBy('notifikasi_pengguna.create_date', 'DESC');
                 break;
             case 'belum_dibaca':
                 $fetch->where('sudah_dibaca','=',0);
@@ -68,10 +69,11 @@ class NotifikasiController extends Controller
                 break;
             case 'sudah_dibaca':
                 $fetch->where('sudah_dibaca','=',1);
-                $fetch->orderBy('notifikasi_pengguna.create_date', 'ASC');
+                $fetch->orderBy('notifikasi_pengguna.create_date', 'DESC');
                 break;
             default:
                 //nggak ngapa2in    
+                $fetch->orderBy('notifikasi_pengguna.create_date', 'DESC');
                 break;
         }
 
@@ -98,15 +100,15 @@ class NotifikasiController extends Controller
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
 
         // try {
-            Redis::zRem('notifikasi_belum_dibaca:'.$pengguna_id, 'notifikasi:'.$notifikasi_id);
-            Redis::zAdd('notifikasi_sudah_dibaca:'.$pengguna_id, sizeof(Redis::zRange('notifikasi_sudah_dibaca:'.$pengguna_id, 0, -1)), 'notifikasi:'.$notifikasi_id);
+            // Redis::zRem('notifikasi_belum_dibaca:'.$pengguna_id, 'notifikasi:'.$notifikasi_id);
+            // Redis::zAdd('notifikasi_sudah_dibaca:'.$pengguna_id, sizeof(Redis::zRange('notifikasi_sudah_dibaca:'.$pengguna_id, 0, -1)), 'notifikasi:'.$notifikasi_id);
 
-            $exe = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
-            ->where('notifikasi_pengguna_id','=',$notifikasi_id)
-            ->update([
-                'sudah_dibaca' => 1,
-                'last_update' => DB::raw("now()")
-            ]);
+        $exe = DB::connection('sqlsrv_2')->table('notifikasi_pengguna')
+        ->where('notifikasi_pengguna_id','=',$notifikasi_id)
+        ->update([
+            'sudah_dibaca' => 1,
+            'last_update' => DB::raw("now()")
+        ]);
 
             // $exe = true;
 

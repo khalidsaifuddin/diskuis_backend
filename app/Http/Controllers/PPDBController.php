@@ -408,6 +408,7 @@ class PPDBController extends Controller
 
 	static function getCalonPesertaDidik(Request $request){
 		$keyword = $request->keyword ? $request->keyword : null;
+		$status_konfirmasi_id = $request->status_konfirmasi_id ? $request->status_konfirmasi_id : null;
         $peserta_didik_id = $request->peserta_didik_id ? $request->peserta_didik_id : null;
         $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
 		$urut_pilihan = $request->urut_pilihan ? $request->urut_pilihan : 99;
@@ -442,6 +443,19 @@ class PPDBController extends Controller
 
         if($peserta_didik_id){
             $fetch->where('ppdb.calon_peserta_didik.calon_peserta_didik_id','=',$peserta_didik_id);
+		}
+        
+		if($status_konfirmasi_id){
+			
+			// return $status_konfirmasi_id;die;
+			if($status_konfirmasi_id !== 'semua'){
+				if($status_konfirmasi_id === "sudah"){
+					$fetch->where('ppdb.calon_peserta_didik.status_konfirmasi_id','=',1);
+				}else{
+					$fetch->whereNull('ppdb.calon_peserta_didik.status_konfirmasi_id');
+				}
+			}
+
 		}
 		
 		if($sekolah_id){
@@ -1313,51 +1327,41 @@ class PPDBController extends Controller
     	$sekolah_pilihan = DB::connection('sqlsrv_2')->table('ppdb.sekolah_pilihan')->where('sekolah_pilihan.peserta_didik_id', $id)
 			->leftJoin('sekolah AS sekolah', 'ppdb.sekolah_pilihan.sekolah_id', '=', 'sekolah.sekolah_id')
 			->leftJoin('ref.jalur AS jalur', 'ppdb.sekolah_pilihan.jalur_id', '=', 'jalur.jalur_id')
-			// ->leftJoin(
-			// 	DB::raw('(
-			// 		SELECT ROW_NUMBER
-			// 		() OVER (
-			// 			PARTITION BY sekolah_pilihan.sekolah_id, sekolah_pilihan.jalur_id
-			// 		ORDER BY
-			// 			sekolah_pilihan.urut_pilihan ASC,
-			// 			COALESCE ( konf.status, 0 ) DESC,
-			// 			konf.last_update ASC,	
-			// 			sekolah_pilihan.create_date ASC
-			// 		) AS urutan,
-			// 		urut_pilihan,
-			// 		COALESCE ( konf.status, 0 ) AS konfirmasi,
-			// 		konf.last_update,
-			// 		sekolah_pilihan.create_date,
-			// 		sekolah_pilihan.jalur_id,
-			// 		calon_peserta_didik.nama,
-			// 		sekolah_pilihan.sekolah_id,
-			// 		sekolah_pilihan.peserta_didik_id
-			// 	FROM
-			// 		ppdb.sekolah_pilihan
-			// 		LEFT JOIN ppdb.konfirmasi_pendaftaran konf ON konf.calon_peserta_didik_id = sekolah_pilihan.peserta_didik_id
-			// 		JOIN ppdb.calon_peserta_didik ON calon_peserta_didik.calon_peserta_didik_id = sekolah_pilihan.peserta_didik_id 
-			// 	WHERE
-			// 		sekolah_pilihan.soft_delete = 0 
-			// 		AND calon_peserta_didik.soft_delete = 0 
-			// 	-- ORDER BY
-			// 	-- 	sekolah_pilihan.urut_pilihan ASC,
-			// 	-- 	COALESCE ( konf.status, 0 ) DESC,
-			// 	-- 	konf.last_update ASC,
-			// 	-- 	sekolah_pilihan.create_date ASC
-			// 	ORDER BY
-			// 		sekolah_pilihan.sekolah_id,
-			// 		sekolah_pilihan.jalur_id
-			// 	) as urutan'), function ($join) {
-			// 	$join->on('urutan.sekolah_id', '=', 'ppdb.sekolah_pilihan.sekolah_id');
-			// 	$join->on('urutan.peserta_didik_id','=','ppdb.sekolah_pilihan.peserta_didik_id');
-			// })
-			// ->leftJoin('ppdb.kuota_sekolah as kuota','kuota.sekolah_id','=','ppdb.sekolah_pilihan.sekolah_id')
+			->leftJoin(
+				DB::raw('(
+					SELECT ROW_NUMBER
+					() OVER (
+						PARTITION BY sekolah_pilihan.sekolah_id, sekolah_pilihan.jalur_id
+					ORDER BY
+						sekolah_pilihan.urut_pilihan ASC,
+						sekolah_pilihan.create_date ASC
+					) AS urutan,
+					urut_pilihan,
+					sekolah_pilihan.create_date,
+					sekolah_pilihan.jalur_id,
+					calon_peserta_didik.nama,
+					sekolah_pilihan.sekolah_id,
+					sekolah_pilihan.peserta_didik_id
+				FROM
+					ppdb.sekolah_pilihan
+					JOIN ppdb.calon_peserta_didik ON calon_peserta_didik.calon_peserta_didik_id = sekolah_pilihan.peserta_didik_id 
+				WHERE
+					sekolah_pilihan.soft_delete = 0 
+					AND calon_peserta_didik.soft_delete = 0 
+				ORDER BY
+					sekolah_pilihan.sekolah_id,
+					sekolah_pilihan.jalur_id
+				) as urutan'), function ($join) {
+				$join->on('urutan.sekolah_id', '=', 'ppdb.sekolah_pilihan.sekolah_id');
+				$join->on('urutan.peserta_didik_id','=','ppdb.sekolah_pilihan.peserta_didik_id');
+			})
+			->leftJoin('ppdb.kuota_sekolah as kuota','kuota.sekolah_id','=','ppdb.sekolah_pilihan.sekolah_id')
 			->select(
 				'sekolah_pilihan.*',
 				'sekolah.npsn AS npsn',
 				'sekolah.nama AS nama_sekolah',
 				'jalur.nama AS nama_jalur',
-				'sekolah_pilihan.urut_pilihan as urutan'
+				'urutan.urutan as urutan'
 			)
 			->where('ppdb.sekolah_pilihan.soft_delete', 0)
 			->orderBy('urut_pilihan','ASC')
