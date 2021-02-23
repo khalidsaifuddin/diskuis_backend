@@ -1593,4 +1593,67 @@ class PPDBController extends Controller
 		], 200);
 		
 	}
+
+	public function getKuota(Request $request){
+		// $sql = "SELECT
+		// 	* 
+		// FROM
+		// 	sekolah 
+		// WHERE
+		// 	sekolah.soft_delete = 0 
+		// 	AND sekolah.bentuk_pendidikan_id IN ( 5, 6 ) 
+		// 	AND LEFT ( sekolah.kode_wilayah, 4 ) = '0521'";
+
+		// $fetch = DB::connection('sqlsrv_2')->selec($sql);
+
+		$start = $request->start ? $request->start : 0;
+		$limit = $request->limit ? $request->limit : 20;
+		$keyword = $request->keyword ? $request->keyword : null;
+
+		$fetch = DB::connection('sqlsrv_2')->table('sekolah')
+		->where('sekolah.soft_delete','=',0)
+		->whereIn('sekolah.bentuk_pendidikan_id', array(5,6))
+		->where(DB::raw('LEFT ( sekolah.kode_wilayah, 4 )'),'=',DB::raw("'0521'"))
+		->leftJoin(DB::raw("(SELECT
+			kuota_sekolah.sekolah_id,
+			SUM ( CASE WHEN kuota_sekolah.jalur_id = '0100' THEN kuota ELSE 0 END ) AS kuota_0100,
+			SUM ( CASE WHEN kuota_sekolah.jalur_id = '0200' THEN kuota ELSE 0 END ) AS kuota_0200,
+			SUM ( CASE WHEN kuota_sekolah.jalur_id = '0300' THEN kuota ELSE 0 END ) AS kuota_0300,
+			SUM ( CASE WHEN kuota_sekolah.jalur_id = '0400' THEN kuota ELSE 0 END ) AS kuota_0400,
+			SUM ( CASE WHEN kuota_sekolah.jalur_id = '0500' THEN kuota ELSE 0 END ) AS kuota_0500 
+		FROM
+			ppdb.kuota_sekolah kuota_sekolah 
+		WHERE
+			soft_delete = 0 
+		GROUP BY
+			kuota_sekolah.sekolah_id) kuota"), 'kuota.sekolah_id','=','sekolah.sekolah_id')
+		->join('ref.bentuk_pendidikan as bp', 'bp.bentuk_pendidikan_id','=','sekolah.bentuk_pendidikan_id')
+		->join('ref.mst_wilayah as kec','kec.kode_wilayah','=',DB::raw("left(sekolah.kode_wilayah,6)"))
+		->join('ref.mst_wilayah as kab','kab.kode_wilayah','=','kec.mst_kode_wilayah')
+		->join('ref.mst_wilayah as prov','prov.kode_wilayah','=','kab.mst_kode_wilayah')
+		->select(
+			'sekolah.*',
+			'kuota.*',
+			DB::raw("(case when sekolah.status_sekolah = 1 then 'Negeri' else 'Swasta' end) as status"),
+			'bp.nama as bentuk',
+			'kec.nama as kecamatan',
+			'kab.nama as kabupaten',
+			'prov.nama as provinsi'
+		)
+		;
+
+		if($keyword){
+			$fetch->where(function($query) use($keyword){
+				$query->where('sekolah.nama', 'ilike', DB::raw("'%".$keyword."%'"))
+					->orWhere('sekolah.npsn','ilike', DB::raw("'%".$keyword."%'"))
+					->orWhere('sekolah.alamat','ilike', DB::raw("'%".$keyword."%'"))
+				;
+			});
+		}
+
+		return response([ 
+			'total' => $fetch->count(), 
+			'rows' => $fetch->skip($start)->take($limit)->get()
+		], 200);
+	}
 }
