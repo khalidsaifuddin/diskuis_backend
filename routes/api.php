@@ -275,6 +275,7 @@ Route::prefix('PPDB')->group(function () {
 	Route::post('getStatistikDinas', 'PPDBController@getStatistikDinas');
 	Route::post('simpanJadwal', 'PPDBController@simpanJadwal');
 	Route::post('getKuota', 'PPDBController@getKuota');
+	Route::post('simpanKuota', 'PPDBController@simpanKuota');
 });
 
 Route::middleware('token')->group(function(){

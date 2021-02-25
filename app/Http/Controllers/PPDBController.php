@@ -412,6 +412,7 @@ class PPDBController extends Controller
         $peserta_didik_id = $request->peserta_didik_id ? $request->peserta_didik_id : null;
         $sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
 		$urut_pilihan = $request->urut_pilihan ? $request->urut_pilihan : 99;
+		$jalur_id_filter = $request->jalur_id_filter ? $request->jalur_id_filter : 99;
         $start = $request->start ? $request->start : 0;
         $limit = $request->limit ? $request->limit : 20;
 
@@ -426,7 +427,8 @@ class PPDBController extends Controller
 			'kab.nama as kabupaten',
 			'prov.nama as provinsi',
 			'sekolah.nama as asal_sekolah',
-			'sekolah.npsn as asal_sekolah_npsn'
+			'sekolah.npsn as asal_sekolah_npsn',
+			'ppdb.calon_peserta_didik.last_update as last_update'
         )
         ->orderBy('ppdb.calon_peserta_didik.create_date', 'DESC')
         // ->orderBy('ppdb.calon_peserta_didik.nama', 'ASC')
@@ -459,7 +461,7 @@ class PPDBController extends Controller
 		}
 		
 		if($sekolah_id){
-			$fetch->join('ppdb.sekolah_pilihan', function($join) use ($sekolah_id, $urut_pilihan)
+			$fetch->join('ppdb.sekolah_pilihan', function($join) use ($sekolah_id, $urut_pilihan, $jalur_id_filter)
 			{
 				$join->on('ppdb.sekolah_pilihan.sekolah_id', '=', DB::raw("'".$sekolah_id."'"));
 				$join->on('ppdb.sekolah_pilihan.peserta_didik_id', '=', 'ppdb.calon_peserta_didik.calon_peserta_didik_id');
@@ -468,6 +470,11 @@ class PPDBController extends Controller
 				if($urut_pilihan !== 99){
 					$join->on('ppdb.sekolah_pilihan.urut_pilihan', '=', DB::raw($urut_pilihan));
 				}
+				
+				if($jalur_id_filter !== 99){
+					$join->on('ppdb.sekolah_pilihan.jalur_id', '=', DB::raw("'".$jalur_id_filter."'"));
+				}
+
 			})
 			->join('ref_ppdb.jalur as jalur','jalur.jalur_id','=','ppdb.sekolah_pilihan.jalur_id')
 			->select(
@@ -477,10 +484,11 @@ class PPDBController extends Controller
 				'prov.nama as provinsi',
 				'ppdb.sekolah_pilihan.*',
 				'sekolah.nama as asal_sekolah',
-				'jalur.nama as jalur'
+				'jalur.nama as jalur',
+				'ppdb.calon_peserta_didik.last_update as last_update'
 			);
 		}else{
-			$fetch->leftJoin('ppdb.sekolah_pilihan', function($join) use ($urut_pilihan)
+			$fetch->leftJoin('ppdb.sekolah_pilihan', function($join) use ($urut_pilihan, $jalur_id_filter)
 			{
 				// $join->on('ppdb.sekolah_pilihan.sekolah_id', '=', DB::raw("'".$sekolah_id."'"));
 				$join->on('ppdb.sekolah_pilihan.peserta_didik_id', '=', 'ppdb.calon_peserta_didik.calon_peserta_didik_id');
@@ -489,6 +497,11 @@ class PPDBController extends Controller
 				if($urut_pilihan !== 99){
 					$join->on('ppdb.sekolah_pilihan.urut_pilihan', '=', DB::raw($urut_pilihan));
 				}
+
+				if($jalur_id_filter !== 99){
+					$join->on('ppdb.sekolah_pilihan.jalur_id', '=', DB::raw("'".$jalur_id_filter."'"));
+				}
+
 			})
 			->leftJoin('ref_ppdb.jalur as jalur','jalur.jalur_id','=','ppdb.sekolah_pilihan.jalur_id')
 			->select(
@@ -498,7 +511,8 @@ class PPDBController extends Controller
 				'prov.nama as provinsi',
 				'ppdb.sekolah_pilihan.*',
 				'sekolah.nama as asal_sekolah',
-				'jalur.nama as jalur'
+				'jalur.nama as jalur',
+				'ppdb.calon_peserta_didik.last_update as last_update'
 			);
 		}
 		
@@ -1001,6 +1015,7 @@ class PPDBController extends Controller
 				calon_peserta_didik.soft_delete = 0 
 				AND sekolah_pilihan.soft_delete = 0 
 				AND calon_peserta_didik.status_konfirmasi_id != 99 
+				AND sekolah_pilihan.urut_pilihan = 1
 			GROUP BY
 				sekolah_pilihan.sekolah_id,
 				sekolah_pilihan.jalur_id 
@@ -1009,6 +1024,8 @@ class PPDBController extends Controller
 		WHERE
 				jalur.expired_date IS NULL 
 				AND jalur.level_jalur = 1";
+
+				// return $sql;die;
 
 		$fetch = DB::connection('sqlsrv_2')->select($sql);
 
@@ -1355,7 +1372,7 @@ class PPDBController extends Controller
 				$join->on('urutan.sekolah_id', '=', 'ppdb.sekolah_pilihan.sekolah_id');
 				$join->on('urutan.peserta_didik_id','=','ppdb.sekolah_pilihan.peserta_didik_id');
 			})
-			->leftJoin('ppdb.kuota_sekolah as kuota','kuota.sekolah_id','=','ppdb.sekolah_pilihan.sekolah_id')
+			// ->leftJoin('ppdb.kuota_sekolah as kuota','kuota.sekolah_id','=','ppdb.sekolah_pilihan.sekolah_id')
 			->select(
 				'sekolah_pilihan.*',
 				'sekolah.npsn AS npsn',
@@ -1366,6 +1383,8 @@ class PPDBController extends Controller
 			->where('ppdb.sekolah_pilihan.soft_delete', 0)
 			->orderBy('urut_pilihan','ASC')
 			->get();
+
+		// return $sekolah_pilihan;die;
 
 		if(count($sekolah_pilihan) >= 1){
 			$urutan = @$sekolah_pilihan[0]->urutan;
@@ -1609,6 +1628,7 @@ class PPDBController extends Controller
 		$start = $request->start ? $request->start : 0;
 		$limit = $request->limit ? $request->limit : 20;
 		$keyword = $request->keyword ? $request->keyword : null;
+		$sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
 
 		$fetch = DB::connection('sqlsrv_2')->table('sekolah')
 		->where('sekolah.soft_delete','=',0)
@@ -1650,10 +1670,67 @@ class PPDBController extends Controller
 				;
 			});
 		}
+		
+		if($sekolah_id){
+			$fetch->where(function($query) use($sekolah_id){
+				$query->where('sekolah.sekolah_id', '=', DB::raw("'".$sekolah_id."'"))
+				;
+			});
+		}
 
 		return response([ 
 			'total' => $fetch->count(), 
 			'rows' => $fetch->skip($start)->take($limit)->get()
+		], 200);
+	}
+
+	public function simpanKuota(Request $request){
+		$sekolah_id = $request->sekolah_id ? $request->sekolah_id : null;
+		$jalur_id = $request->jalur_id ? $request->jalur_id : null;
+		$kuota = $request->kuota ? $request->kuota : null;
+
+		$cek = DB::connection('sqlsrv_2')->table('ppdb.kuota_sekolah')
+		->where('ppdb.kuota_sekolah.sekolah_id','=',$sekolah_id)
+		->where('ppdb.kuota_sekolah.jalur_id','=',$jalur_id)
+		->get()
+		;
+
+		if(sizeof($cek)> 0){
+			//update
+			$exe = DB::connection('sqlsrv_2')->table('ppdb.kuota_sekolah')
+			->where('ppdb.kuota_sekolah.sekolah_id','=',$sekolah_id)
+			->where('ppdb.kuota_sekolah.jalur_id','=',$jalur_id)
+			->update([
+				'kuota' => $kuota,
+				'last_update' => DB::raw("now()")
+			])
+			;
+
+		}else{
+			//insert
+			$kuota_sekolah_id = RuangController::generateUUID();
+
+			$exe = DB::connection('sqlsrv_2')->table('ppdb.kuota_sekolah')
+			->insert([
+				'kuota_sekolah_id' => $kuota_sekolah_id,
+				'sekolah_id' => $sekolah_id,
+				'jalur_id' => $jalur_id,
+				'kuota' => $kuota,
+				'periode_kegiatan_id' => '2021',
+				'create_date' => DB::raw("now()"),
+				'last_update' => DB::raw("now()"),
+				'soft_delete' => 0
+			])
+			;
+
+		}
+
+		return response([ 
+			'sukses' => $exe ? true : false, 
+			'rows' => DB::connection('sqlsrv_2')->table('ppdb.kuota_sekolah')
+			->where('ppdb.kuota_sekolah.sekolah_id','=',$sekolah_id)
+			->where('ppdb.kuota_sekolah.jalur_id','=',$jalur_id)
+			->get()
 		], 200);
 	}
 }
