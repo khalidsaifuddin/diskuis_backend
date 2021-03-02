@@ -125,6 +125,7 @@ Route::prefix('Ruang')->group(function () {
 Route::prefix('Poin')->group(function () {
 	Route::post('getLeaderboardPengguna', 'PoinController@getLeaderboardPengguna');
 	Route::post('getLeaderboardGlobal', 'PoinController@getLeaderboardGlobal');
+	Route::post('getPoinPengguna', 'PoinController@getPoinPengguna');
 });
 
 Route::prefix('Siswa')->group(function () {

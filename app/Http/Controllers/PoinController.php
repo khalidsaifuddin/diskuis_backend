@@ -23,6 +23,35 @@ class PoinController extends Controller
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
     }
 
+    static function getPoinPengguna(Request $request){
+        $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
+
+        $sql = "SELECT
+            pengguna.username,
+            aaa.* 
+        FROM
+            (
+            SELECT
+                rekap_poin.* 
+            FROM
+                rekap.poin_pengguna_harian rekap_poin
+                JOIN pengguna ON pengguna.pengguna_id = rekap_poin.pengguna_id                
+            WHERE
+                pengguna.soft_delete = 0 
+            ) aaa
+            JOIN pengguna ON pengguna.pengguna_id = aaa.pengguna_id 
+        where pengguna.pengguna_id = '".$pengguna_id."'
+        ";
+
+        $fetch = DB::connection('sqlsrv_2')->select($sql);
+
+        $return = array();
+        $return['rows'] = $fetch;
+        $return['total'] = sizeof($fetch);
+
+        return $return;
+    }
+
     static function getLeaderboardGlobal(Request $request){
         $pengguna_id = $request->pengguna_id ? $request->pengguna_id : null;
         $start = $request->start ? $request->start : 0;

@@ -22,7 +22,7 @@ class PesanController extends Controller
     static function getPesan(Request $request){
         $kelompok_pesan_id = $request->kelompok_pesan_id ? $request->kelompok_pesan_id : null;
         $start = $request->start ? $request->start : 0;
-        $limit = $request->limit ? $request->limit : 20;
+        $limit = $request->limit ? $request->limit : 30;
 
         $fetch = DB::connection('sqlsrv_2')->table('pesan')
         ->where('kelompok_pesan_id','=',$kelompok_pesan_id)
