@@ -277,6 +277,8 @@ Route::prefix('PPDB')->group(function () {
 	Route::post('simpanJadwal', 'PPDBController@simpanJadwal');
 	Route::post('getKuota', 'PPDBController@getKuota');
 	Route::post('simpanKuota', 'PPDBController@simpanKuota');
+	Route::post('simpanDaftarUlang', 'PPDBController@simpanDaftarUlang');
+	Route::get('unduhExcelPendaftarDiterima', 'PPDBController@unduhExcelPendaftarDiterima');
 });
 
 Route::middleware('token')->group(function(){
